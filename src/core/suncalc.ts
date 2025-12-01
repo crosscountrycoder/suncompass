@@ -660,7 +660,7 @@ export function intervalsNightCivilTwilight(sunEvents: SEvent[], timeZone: TimeC
     }
     if (newSunEvents.length == 0) {
         const s = sunEvents[0].elev;
-        if (s < -6) {return [[[0, DAY_LENGTH]], [[0, DAY_LENGTH]]];}
+        if (s < -6) {return [[[0, DAY_LENGTH]], []];}
         else if (s < -5/6) {return [[], [[0, DAY_LENGTH]]];}
         else {return [[], []];}
     }

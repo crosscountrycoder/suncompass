@@ -19,7 +19,7 @@ const start = performance.now();
 
 const args = process.argv;
 if (args.length < 4 || args.length > 6) {
-    console.log("Syntax: node generate-svg.js <lat> <long> [year] [location-name]");
+    console.log("Syntax: npx ts-node scripts/generate-svg.ts <lat> <long> [year] [location-name]");
     process.exit(1);
 }
 
