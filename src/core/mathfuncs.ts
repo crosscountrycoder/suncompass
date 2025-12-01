@@ -1,6 +1,10 @@
 import { DateTime } from 'luxon';
 import {DAY_LENGTH, earthERadius, flattening, J2000UTC, degToRad} from "./constants.ts";
 
+export type Point = [number, number];
+export type Polygon = Point[];
+export type Polyline = Point[];
+
 /** Divide x by y, rounding the output to the nearest integer with smaller absolute value. */
 export function intDiv(x: number, y: number) {
     if (x<0) {return Math.ceil(x/y);}
@@ -274,6 +278,10 @@ export function dayStarts(start: DateTime, end: DateTime): DateTime[] {
     return dayStarts;
 }
 
+type Seg = { a: number[]; b: number[] };
+// EPS for key-stability with fractional coords
+const SNAP = 1e-6;
+const snap = (v: number) => Math.round(v / SNAP) * SNAP;
 /** Convert a time of day in milliseconds to hh:mm:ss in either 12 or 24-hour format. */
 export function convertToHMS(timeOfDay: number, twentyFourHours: boolean) {
     const timeOfDayS = Math.floor(timeOfDay / 1000);
@@ -287,4 +295,105 @@ export function convertToHMS(timeOfDay: number, twentyFourHours: boolean) {
     if (twentyFourHours) {return `${hourString24}:${minString}:${secString}`;} // ex: 09:47:29
     else if (hour24 <= 11) {return `${hour12}:${minString}:${secString} am`;} // ex: 9:47:29 am
     else {return `${hour12}:${minString}:${secString} pm`;} // ex: 9:47:29 pm
+}
+
+/** Convert a series of intervals into sets of points representing polygons. */
+export function intervalsToPolygon(intervals: number[][][]): Polygon[] {
+    const normalizeSpans = (spans: number[][]): number[][] => {
+        if (!spans || spans.length === 0) return [];
+        const s = spans.map(([a, b]) => [Math.min(a, b), Math.max(a, b)] as [number, number]).sort((u, v) => (u[0]-v[0]) || (u[1]-v[1]));
+        const out: number[][] = [];
+        for (const [a, b] of s) {
+            if (out.length === 0 || a > out[out.length-1][1]) {out.push([a, b]);} 
+            else {out[out.length - 1][1] = Math.max(out[out.length-1][1], b);}
+        }
+        return out;
+    };
+    // symmetric difference of two disjoint, sorted span lists
+    const xorSpans = (A: number[][], B: number[][]): number[][] => {
+        const evts: {y: number; d: number}[] = [];
+        for (const [a, b] of A) {evts.push({ y: a, d: +1 }, { y: b, d: -1 });}
+        for (const [a, b] of B) {evts.push({ y: a, d: +1 }, { y: b, d: -1 });}
+        evts.sort((u, v) => (u.y - v.y) || (v.d - u.d)); // starts before ends at same y
+        const out: number[][] = [];
+        let inside = 0;
+        let y0 = 0;
+        for (const { y, d } of evts) {
+            if (inside == 1) out.push([y0, y]);
+            inside = (inside + d) & 1;
+            y0 = y;
+        }
+        return out;
+    };
+    const keyOf = (p: number[]) => `${snap(p[0])}:${snap(p[1])}`;
+    const segKey = (u: number[], v: number[]) => {
+        const ux = snap(u[0]), uy = snap(u[1]);
+        const vx = snap(v[0]), vy = snap(v[1]);
+        return (ux < vx || (ux === vx && uy <= vy)) ? `${ux}:${uy}->${vx}:${vy}` : `${vx}:${vy}->${ux}:${uy}`;
+    };
+    const addAdj = (adj: Map<string, number[][]>, u: number[], v: number[]) => {
+        const ku = keyOf(u), kv = keyOf(v);
+        if (!adj.has(ku)) adj.set(ku, []);
+        if (!adj.has(kv)) adj.set(kv, []);
+        adj.get(ku)!.push([snap(v[0]), snap(v[1])]);
+        adj.get(kv)!.push([snap(u[0]), snap(u[1])]);
+    };
+
+    // build segments
+    const W = intervals.length;
+    const cols = Array.from({ length: W }, (_, x) => normalizeSpans(intervals[x] || []));
+    const horizontal: Seg[] = [];
+    for (let x = 0; x < W; x++) {
+        for (const [a, b] of cols[x]) {
+            horizontal.push({ a: [x, a], b: [x + 1, a] }); // bottom cap
+            horizontal.push({ a: [x, b], b: [x + 1, b] }); // top cap
+        }
+    }
+
+    const vertical: Seg[] = [];
+    for (let x = 0; x <= W; x++) {
+        const L = x > 0 ? cols[x - 1] : [];
+        const R = x < W ? cols[x] : [];
+        const diff = xorSpans(L, R);
+        for (const [a, b] of diff) {vertical.push({ a: [x, a], b: [x, b] });}
+    }
+    const segs: Seg[] = vertical.concat(horizontal).map(({ a, b }) => ({a: [snap(a[0]), snap(a[1])], b: [snap(b[0]), snap(b[1])]}));
+
+    // stitch into rings
+    const adj = new Map<string, Polygon>();
+    for (const { a, b } of segs) {addAdj(adj, a, b);}
+    const used = new Set<string>();
+    const polygons: Polygon[] = [];
+
+    for (const { a, b } of segs) {
+        const startEdge = segKey(a, b);
+        if (used.has(startEdge)) continue;
+
+        // seed walk with the exact edge (a -> b)
+        used.add(startEdge);
+        const polygon: Polygon = [];
+        polygon.push([snap(a[0]), snap(a[1])]);
+        let prev: Point = [snap(a[0]), snap(a[1])];
+        let curr: Point = [snap(b[0]), snap(b[1])];
+
+        while (true) {
+            polygon.push(curr);
+            const nbrs: Polygon = adj.get(keyOf(curr)) || [];
+            // choose neighbor that's NOT prev, prefer the one whose edge isn't used yet
+            let next: Point | undefined;
+            for (const cand of nbrs) {
+                if (cand[0] === prev[0] && cand[1] === prev[1]) continue;
+                const k = segKey(curr, cand);
+                if (!used.has(k)) { next = cand; break; }
+            }
+            if (!next) break; // should not happen if all loops are closed
+
+            used.add(segKey(curr, next));
+            prev = curr;
+            curr = next;
+            if (curr[0] === polygon[0][0] && curr[1] === polygon[0][1]) break; // closed
+        }
+        if (polygon.length >= 4) {polygons.push(polygon);}
+    }
+    return polygons;
 }

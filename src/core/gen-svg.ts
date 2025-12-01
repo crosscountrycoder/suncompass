@@ -6,7 +6,7 @@
 
 import {getTimeOfDay} from "./lookup-tables.ts";
 import * as mf from "./mathfuncs.ts";
-import {intervalsSvg, lengths} from "./suncalc.ts";
+import {intervalsSvg, lengths, intervalsNightCivilTwilight} from "./suncalc.ts";
 import {DAY_LENGTH} from "./constants.ts";
 import {DateTime} from "luxon";
 import type {SEvent, TimeChange} from "./lookup-tables.ts";
@@ -14,8 +14,45 @@ import type {SEvent, TimeChange} from "./lookup-tables.ts";
 const svgClose = "</svg>";
 const sunColors = ["#80c0ff", "#0060c0", "#004080", "#002040", "#000000"];
 
+type sunSvgOptions = {
+    events: SEvent[][];
+    type: string;
+    timeZone: TimeChange[];
+    solsticesEquinoxes: DateTime[];
+    svgWidth?: number;
+    svgHeight?: number;
+    leftPadding?: number;
+    rightPadding?: number;
+    topPadding?: number;
+    bottomPadding?: number;
+    textSize?: number;
+    font?: string;
+    language?: string;
+    gridInterval?: number;
+    gridlineWidth?: number
+};
+
+type moonSvgOptions = {
+    sunEvents: SEvent[][];
+    moonIntervals: number[][][];
+    timeZone: TimeChange[];
+    newMoons: DateTime[];
+    fullMoons: DateTime[];
+    svgWidth?: number;
+    svgHeight?: number;
+    leftPadding?: number;
+    rightPadding?: number;
+    topPadding?: number;
+    bottomPadding?: number;
+    textSize?: number;
+    font?: string;
+    language?: string;
+    gridInterval?: number;
+    gridlineWidth?: number
+};
+
 /** Generates the opening of an SVG */
-function svgOpen(width: number, height: number) {
+function svgOpen(width: number, height: number): string {
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">\n`
 }
 
@@ -29,13 +66,12 @@ function svgOpen(width: number, height: number) {
  * @returns SVG string for the given polygon.
  */
 function polygonFromArray(
-    points: number[][],
+    points: mf.Polygon,
     fillColor: string = "none",
     strokeColor: string = "none",
     strokeWidth: number = 0,
     precision: number = 2,
-): string
-{
+): string {
     const simplifiedPoints = simplifyCollinear(points); 
     const ptsAttr = simplifiedPoints.map(([x,y]) => `${mf.toFixedS(x,precision)},${mf.toFixedS(y,precision)}`).join(" "); // format the "x,y x,y ..." string
     return `<polygon points="${ptsAttr}" fill="${fillColor}" stroke="${strokeColor}" stroke-width="${strokeWidth}"/>\n`;
@@ -43,7 +79,7 @@ function polygonFromArray(
 
 /** Generates SVG code for a polyline from an array of points with the specified stroke color, width, and precision (digits after the
  * decimal point in the coordinates). */
-function polylineFromArray(points: number[][], color: string = "#000000", width: number = 1, precision: number = 2): string {
+function polylineFromArray(points: mf.Polyline, color: string = "#000000", width: number = 1, precision: number = 2): string {
     const ptsAttr = points.map(([x,y]) => `${mf.toFixedS(x,precision)},${mf.toFixedS(y,precision)}`).join(" "); // format the "x,y x,y ..." string
     return `<polyline points="${ptsAttr}" fill="none" stroke="${color}" stroke-width="${width}"/>\n`;
 }
@@ -51,8 +87,7 @@ function polylineFromArray(points: number[][], color: string = "#000000", width:
 /** Generates SVG code for a rectangle with the top-left corner at the given x and y cordinates, and the given width, height,
  * fill and stroke colors. */
 function rectangleSvg(x: number, y: number, width: number, height: number, fillColor: string = "none", strokeColor: string = "none",
-    strokeWidth: number = 0
-) {
+    strokeWidth: number = 0) {
     return `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${fillColor}" stroke="${strokeColor}" stroke-width="${strokeWidth}"/>\n`
 }
 
@@ -69,31 +104,31 @@ function textSvg(
     textAnchor: string,
     alignmentBaseline: string,
     precision: number = 2
-) {
+): string {
     return `<text x="${mf.toFixedS(x,precision)}" y="${mf.toFixedS(y,precision)}" font-family="${font}" font-size="${fontSize}pt"`
     + ` text-anchor="${textAnchor}" alignment-baseline="${alignmentBaseline}" fill="${textColor}">${text}</text>\n`;
 }
 
 /** Generates an SVG line from (x1, y1) to (x2, y2) with the given color and width. */
-function lineSvg(x1: number, y1: number, x2: number, y2: number, color: string, width: number, precision: number = 2) {
-    return `<line x1="${mf.toFixedS(x1,precision)}" y1="${mf.toFixedS(y1,precision)}" x2="${mf.toFixedS(x2,precision)}" y2="${mf.toFixedS(y2,precision)}"`
-    + ` stroke="${color}" stroke-width="${width}"/>\n`;
+function lineSvg(p1: mf.Point, p2: mf.Point, color: string, width: number, precision: number = 2): string {
+    return `<line x1="${mf.toFixedS(p1[0],precision)}" y1="${mf.toFixedS(p1[1],precision)}" x2="${mf.toFixedS(p2[0],precision)}"`
+    + ` y2="${mf.toFixedS(p2[1],precision)}" stroke="${color}" stroke-width="${width}"/>\n`;
 }
 
-/** Returns an array of month abbreviations in the given language (represented by a language code, such as "en" for English, "es" for
- * Spanish, or "zh" for Mandarin Chinese). So far, there is only English - I plan to add more when I localize the site. */
-function months(language: string = "en") {
+/** Returns an array of month abbreviations in the given language, represented by a language code, such as "en" (English), "es"
+ * (Spanish), "fr" (French), "zh" (Chinese). So far there is only English - I plan to add more when I localize the site. */
+function months(language: string = "en"): string[] {
     return ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 }
 
 /** Edges of the months, used for drawing gridlines. */
-function monthEdges(leapYear: boolean = false) {
+function monthEdges(leapYear: boolean = false): number[] {
     if (leapYear) {return [0,31,60,91,121,152,182,213,244,274,305,335,366];}
     else {return [0,31,59,90,120,151,181,212,243,273,304,334,365];}
 }
 
 /** Simplifies a polygon or polyline (represented as points) to remove collinear points. */
-function simplifyCollinear(points: number[][]) {
+function simplifyCollinear(points: mf.Polygon | mf.Polyline) {
     if (points.length <= 2) {return points;}
     const newPoints = [points[0], points[1]];
     for (let i=2; i<points.length; i++) {
@@ -106,201 +141,59 @@ function simplifyCollinear(points: number[][]) {
     return newPoints;
 }
 
-type Seg = { a: number[]; b: number[] };
-
-// EPS for key-stability with fractional coords
-const SNAP = 1e-6;
-const snap = (v: number) => Math.round(v / SNAP) * SNAP;
-
-/** Convert a series of intervals into sets of points representing polygons. */
-function intervalsToPolygon(intervals: number[][][]): number[][][] {
-    const normalizeSpans = (spans: number[][]): number[][] => {
-        if (!spans || spans.length === 0) return [];
-        const s = spans.map(([a, b]) => [Math.min(a, b), Math.max(a, b)] as [number, number]).sort((u, v) => (u[0]-v[0]) || (u[1]-v[1]));
-        const out: number[][] = [];
-        for (const [a, b] of s) {
-            if (out.length === 0 || a > out[out.length-1][1]) {out.push([a, b]);} 
-            else {out[out.length - 1][1] = Math.max(out[out.length-1][1], b);}
-        }
-        return out;
-    };
-    // symmetric difference of two disjoint, sorted span lists
-    const xorSpans = (A: number[][], B: number[][]): number[][] => {
-        const evts: {y: number; d: number}[] = [];
-        for (const [a, b] of A) {evts.push({ y: a, d: +1 }, { y: b, d: -1 });}
-        for (const [a, b] of B) {evts.push({ y: a, d: +1 }, { y: b, d: -1 });}
-        evts.sort((u, v) => (u.y - v.y) || (v.d - u.d)); // starts before ends at same y
-        const out: number[][] = [];
-        let inside = 0;
-        let y0 = 0;
-        for (const { y, d } of evts) {
-            if (inside == 1) out.push([y0, y]);
-            inside = (inside + d) & 1;
-            y0 = y;
-        }
-        return out;
-    };
-    const keyOf = (p: number[]) => `${snap(p[0])}:${snap(p[1])}`;
-    const segKey = (u: number[], v: number[]) => {
-        const ux = snap(u[0]), uy = snap(u[1]);
-        const vx = snap(v[0]), vy = snap(v[1]);
-        return (ux < vx || (ux === vx && uy <= vy)) ? `${ux}:${uy}->${vx}:${vy}` : `${vx}:${vy}->${ux}:${uy}`;
-    };
-    const addAdj = (adj: Map<string, number[][]>, u: number[], v: number[]) => {
-        const ku = keyOf(u), kv = keyOf(v);
-        if (!adj.has(ku)) adj.set(ku, []);
-        if (!adj.has(kv)) adj.set(kv, []);
-        adj.get(ku)!.push([snap(v[0]), snap(v[1])]);
-        adj.get(kv)!.push([snap(u[0]), snap(u[1])]);
-    };
-
-    // ---- build segments ----
-    const W = intervals.length;
-    const cols = Array.from({ length: W }, (_, x) => normalizeSpans(intervals[x] || []));
-    const horizontal: Seg[] = [];
-    for (let x = 0; x < W; x++) {
-        for (const [a, b] of cols[x]) {
-            horizontal.push({ a: [x, a], b: [x + 1, a] }); // bottom cap
-            horizontal.push({ a: [x, b], b: [x + 1, b] }); // top cap
-        }
-    }
-
-    const vertical: Seg[] = [];
-    for (let x = 0; x <= W; x++) {
-        const L = x > 0 ? cols[x - 1] : [];
-        const R = x < W ? cols[x] : [];
-        const diff = xorSpans(L, R);
-        for (const [a, b] of diff) {vertical.push({ a: [x, a], b: [x, b] });}
-    }
-    const segs: Seg[] = vertical.concat(horizontal).map(({ a, b }) => ({a: [snap(a[0]), snap(a[1])], b: [snap(b[0]), snap(b[1])]}));
-
-    // ---- stitch into rings ----
-    const adj = new Map<string, number[][]>();
-    for (const { a, b } of segs) addAdj(adj, a, b);
-    const used = new Set<string>();
-    const polygons: number[][][] = [];
-
-    for (const { a, b } of segs) {
-        const startEdge = segKey(a, b);
-        if (used.has(startEdge)) continue;
-
-        // seed walk with the exact edge (a -> b)
-        used.add(startEdge);
-        const polygon: number[][] = [];
-        polygon.push([snap(a[0]), snap(a[1])]);
-        let prev = [snap(a[0]), snap(a[1])];
-        let curr = [snap(b[0]), snap(b[1])];
-
-        while (true) {
-            polygon.push(curr);
-            const nbrs = adj.get(keyOf(curr)) || [];
-            // choose neighbor that's NOT prev, prefer the one whose edge isn't used yet
-            let next: number[] | undefined;
-            for (const cand of nbrs) {
-                if (cand[0] === prev[0] && cand[1] === prev[1]) continue;
-                const k = segKey(curr, cand);
-                if (!used.has(k)) { next = cand; break; }
-            }
-            if (!next) break; // should not happen if all loops are closed
-
-            used.add(segKey(curr, next));
-            prev = curr;
-            curr = next;
-            if (curr[0] === polygon[0][0] && curr[1] === polygon[0][1]) break; // closed
-        }
-        if (polygon.length >= 4) {polygons.push(polygon);}
-    }
-    return polygons;
+/** Transforms times of day and year into SVG diagram coordinates based on the image parameters. 
+ * The point is transformed in place, and this function doesn't return anything. */
+function coordinateTransform(point: mf.Point, options: sunSvgOptions | moonSvgOptions, addOneHalf: boolean = false) {
+    const days = ("events" in options) ? options.events.length : options.sunEvents.length;
+    if (addOneHalf) {point[0] += 0.5;}
+    point[0] = options.leftPadding! + options.svgWidth! * (point[0] / days);
+    point[1] = options.topPadding! + options.svgHeight! * (1 - point[1] / DAY_LENGTH);
 }
 
 /**
  * Returns a string containing an SVG diagram for either day/twilight/night lengths throughout the year, or the times of day in which
  * day, night, and each stage of twilight occur.
+ * Parameters should be passed in an object. All parameters except events, type, timeZone, and solsticesEquinoxes are optional.
  * @param events Values of "allSunEvents" for each day of the year.
  * @param type Set to "length" to generate a day/night/twilight length chart, or "rise-set" to generate a chart with times of day.
  * @param timeZone Time zone, either as an IANA string or a lookup table (see mathfuncs.timeZoneLookupTable)
  * @param solsticesEquinoxes Solstices and equinoxes for the given year, as an array of four DateTimes. They will appear as green lines on the diagram.
- * @param svgWidth Width of the chart (not the entire SVG file) in pixels. Defaults to 1000.
- * @param svgHeight Height of the chart (not the entire SVG file) in pixels. Defaults to 500.
+ * @param svgWidth Width of the chart (not the entire SVG file) in pixels. Defaults to 1100.
+ * @param svgHeight Height of the chart (not the entire SVG file) in pixels. Defaults to 550.
  * @param leftPadding Padding to the left of the carpet plot in pixels. Defaults to 25.
  * @param rightPadding Padding to the right of the carpet plot in pixels. Defaults to 10.
  * @param topPadding Padding above the carpet plot in pixels. Defaults to 10.
  * @param bottomPadding Padding below the carpet plot in pixels. Defaults to 25.
  * @param textSize The font size to use for the axis labels, in points. Defaults to 11.
  * @param font The font family to use for the axis labels. Defaults to Arial.
- * @param textColor Color of text in axis labels. Defaults to #000000 (black).
- * @param backgroundColor The background color of the SVG file. Defaults to #ffffff (white).
- * @param language The language used for month abbreviations, represented as a 2-letter code for example "en" for English, "es" for Spanish
- * or "zh" for Mandarin Chinese. Defaults to "en" (English).
+ * @param language The language used for month abbreviations, represented as a 2-letter code.
  * @param gridInterval Y axis interval. Defaults to 2 (i.e. 2 hours between gridlines).
  * @param gridlineWidth Width of gridlines. Defaults to 0.5 (pixels).
  * @returns A string for the carpet plot, with gridlines and axis labels, that can be saved into an SVG file.
  * The total width of the SVG file is equal to svgWidth + leftPadding + rightPadding. The height is equal to svgHeight + topPadding +
  * bottomPadding.
  */
-export function generateSvg({
-    events,
-    type,
-    timeZone,
-    solsticesEquinoxes,
-    svgWidth = 1100,
-    svgHeight = 550,
-    leftPadding = 25,
-    rightPadding = 10,
-    topPadding = 10,
-    bottomPadding = 25,
-    textSize = 11,
-    font = "Arial",
-    textColor = "#000000",
-    backgroundColor = "#ffffff",
-    language = "en",
-    gridInterval = 2,
-    gridlineWidth = 0.5
-}: {
-    events: SEvent[][],
-    type: string,
-    timeZone: TimeChange[],
-    solsticesEquinoxes: DateTime[],
-    svgWidth?: number,
-    svgHeight?: number,
-    leftPadding?: number,
-    rightPadding?: number,
-    topPadding?: number,
-    bottomPadding?: number,
-    textSize?: number,
-    font?: string,
-    textColor?: string,
-    backgroundColor?: string,
-    language?: string,
-    gridInterval?: number,
-    gridlineWidth?: number
-}): string
-{
+export function generateSunSvg(options: sunSvgOptions): string {
+    const {events,type,timeZone,solsticesEquinoxes,svgWidth=1100,svgHeight=550,leftPadding=25,rightPadding=10,
+        topPadding=10,bottomPadding=25,textSize=11,font="Arial",language="en",gridInterval=2,gridlineWidth=0.5} = options;
     const days = events.length; // 365 days for common years, 366 for leap years
-    const gridColor: string = (type == "moon") ? "#000000" : "#808080"; // gridline color
+    const isLeapYear = (days == 366);
+    const nOptions = // normalized options
+    {...options,svgWidth,svgHeight,leftPadding,rightPadding,topPadding,bottomPadding,textSize,font,language,gridInterval,gridlineWidth};
 
-    /** x-coordinate representing given day */
-    function xCoord(dayNumber: number) {return leftPadding + svgWidth * (dayNumber / days);}
-
-    /** y-coordinate representing day length */
-    function yCoord(dayLength: number) {return topPadding + svgHeight * (1 - dayLength / DAY_LENGTH);}
-
-    /** Converts a set of durations into an array of points representing a polyon. */
-    function durationsToArray(durations: number[]): number[][][] {
-        const p: number[][][] = [[]]; // p is short for polygons
+    /** Converts a set of durations into an array of points representing a polygon. This includes coordinate transforms. */
+    function durationsToArray(durations: number[]): mf.Polygon[] {
+        const p: mf.Polygon[] = [[]]; // p is short for polygons
         for (let i=0; i<days; i++) {
             if (durations[i] > 0) {
-                if (i == 0 || durations[i-1] == 0) {p[0].push(
-                    [xCoord(i), yCoord(0)], 
-                    [xCoord(i), yCoord(durations[i])],
-                    [xCoord(i+1), yCoord(durations[i])]);
-                }
-                else {p[p.length-1].push([xCoord(i), yCoord(durations[i])], [xCoord(i+1), yCoord(durations[i])]);}
-                if (i == days-1) {p[p.length-1].push([xCoord(days), yCoord(0)]);}
+                if (i == 0 || durations[i-1] == 0) {p[0].push([i, 0], [i, durations[i]], [i+1, durations[i]]);}
+                else {p[p.length-1].push([i, durations[i]], [i+1, durations[i]]);}
+                if (i == days-1) {p[p.length-1].push([days, 0]);}
             }
-            else if (i != 0 && durations[i-1] > 0) {
-                p[p.length-1].push([xCoord(i), yCoord(0)]);
-            }
+            else if (i != 0 && durations[i-1] > 0) {p[p.length-1].push([i, 0]);}
+        }
+        for (const polygon of p) {
+            for (const point of polygon) {coordinateTransform(point, nOptions);}
         }
         return p;
     }
@@ -316,7 +209,7 @@ export function generateSvg({
             solarNoons.push(curDay);
         }
         
-        const groups: number[][][] = []; // a group of multiple lines (number[][]), each representing a cluster of solar noons
+        const groups: mf.Polyline[] = []; // a group of multiple lines, each representing a cluster of solar noons
         for (const solarNoon of solarNoons[0]) {groups.push([[0, solarNoon]]);}
         for (let i=1; i<days; i++) { // for each day of the year
             for (const noon of solarNoons[i]) { // for each solar noon of the day (may be more than 1)
@@ -332,10 +225,7 @@ export function generateSvg({
             }
         }
         for (const line of groups) { // convert to SVG coordinates
-            for (const point of line) {
-                point[0] = xCoord(point[0]+0.5);
-                point[1] = yCoord(point[1]);
-            }
+            for (const point of line) {coordinateTransform(point, nOptions, true);}
         }
         const lines: string[] = [];
         for (const line of groups) {lines.push(polylineFromArray(line, "#ff0000"));}
@@ -353,7 +243,7 @@ export function generateSvg({
             solarMidnights.push(curDay);
         }
         
-        const groups: number[][][] = []; // a group of multiple lines (number[][]), each representing a cluster of solar midnights
+        const groups: mf.Polyline[] = []; // a group of multiple lines (number[][]), each representing a cluster of solar midnights
         for (const solarMidnight of solarMidnights[0]) {
             groups.push([[0, solarMidnight]]);
         }
@@ -371,10 +261,7 @@ export function generateSvg({
             }
         }
         for (const line of groups) { // convert to SVG coordinates
-            for (const point of line) {
-                point[0] = xCoord(point[0]+0.5);
-                point[1] = yCoord(point[1]);
-            }
+            for (const point of line) {coordinateTransform(point, nOptions, true);}
         }
         const lines: string[] = [];
         for (const line of groups) {lines.push(polylineFromArray(line, "#0000ff"));}
@@ -382,12 +269,9 @@ export function generateSvg({
     }
 
     function toPolygons(intervals: number[][][], color: string): string[] {
-        const polygons = intervalsToPolygon(intervals);
+        const polygons = mf.intervalsToPolygon(intervals);
         for (const polygon of polygons) {
-            for (const point of polygon) {
-                point[0] = xCoord(point[0]);
-                point[1] = yCoord(point[1]);
-            }
+            for (const point of polygon) {coordinateTransform(point, nOptions);}
         }
         const strings: string[] = [];
         for (const polygon of polygons) {strings.push(polygonFromArray(polygon, color));}
@@ -398,7 +282,7 @@ export function generateSvg({
     const imageWidth = svgWidth + leftPadding + rightPadding;
     const imageHeight = svgHeight + topPadding + bottomPadding;
     let svgString = svgOpen(imageWidth, imageHeight);
-    svgString += rectangleSvg(0, 0, imageWidth, imageHeight, backgroundColor); // white background
+    svgString += rectangleSvg(0, 0, imageWidth, imageHeight, "#ffffff"); // white background
 
     if (type == "length") { // day/twilight/night length plot
         const dLengths: number[] = []; // day lengths
@@ -455,27 +339,122 @@ export function generateSvg({
     // draw solstices and equinoxes as green lines
     for (const date of Object.values(solsticesEquinoxes)) {
         const newYear = DateTime.fromISO(`${date.year}-01-01`, {zone: date.zone});
-        const x = xCoord(date.diff(newYear, ['days', 'hours']).days + 0.5);
-        svgString += lineSvg(x, topPadding, x, topPadding+svgHeight, "#00c000", 1);
+        const x = date.diff(newYear, ['days', 'hours']).days;
+        const p1: mf.Point = [x, DAY_LENGTH], p2: mf.Point = [x, 0];
+        coordinateTransform(p1, nOptions, true); coordinateTransform(p2, nOptions, true);
+        svgString += lineSvg(p1, p2, "#00c000", 1);
     }
 
     // draw y-axis and gridlines
     for (let i=0; i<=24; i+=gridInterval) {
-        const y = yCoord((i/24)*DAY_LENGTH);
-        svgString += textSvg(String(i), leftPadding-5, y, textSize, font, textColor, "end", "middle");
-        svgString += lineSvg(leftPadding, y, leftPadding+svgWidth, y, gridColor, gridlineWidth);
+        const y = topPadding + (1-i/24) * svgHeight;
+        svgString += textSvg(String(i), leftPadding-5, y, textSize, font, "#000000", "end", "middle");
+        svgString += lineSvg([leftPadding, y], [leftPadding+svgWidth, y], "#808080", gridlineWidth);
     }
 
     // draw x-axis and gridlines
     for (let i=0; i<12; i++) {
-        const x = xCoord(monthEdges(days != 365)[i]);
-        const xText = (x + xCoord(monthEdges(days != 365)[i+1]))/2;
-        svgString += textSvg(months(language)[i], xText, topPadding+svgHeight+12, textSize, font, textColor, "middle", "middle");
-        svgString += lineSvg(x, topPadding, x, topPadding+svgHeight, gridColor, gridlineWidth);
+        const x = monthEdges(isLeapYear)[i];
+        const xText = (x + monthEdges(isLeapYear)[i+1])/2;
+        const p1: mf.Point = [x, DAY_LENGTH], p2: mf.Point = [x, 0], pText: mf.Point = [xText, 0];
+        coordinateTransform(p1, nOptions);
+        coordinateTransform(p2, nOptions);
+        coordinateTransform(pText, nOptions);
+        svgString += textSvg(months(language)[i], pText[0], pText[1]+12, textSize, font, "#000000", "middle", "middle");
+        svgString += lineSvg(p1, p2, "#808080", gridlineWidth);
     }
-    svgString += lineSvg(leftPadding+svgWidth, topPadding, leftPadding+svgWidth, topPadding+svgHeight, gridColor, gridlineWidth);
+    svgString += lineSvg([leftPadding+svgWidth, topPadding], [leftPadding+svgWidth, topPadding+svgHeight], 
+        "#808080", gridlineWidth); // right boundary of diagram
+    svgString += svgClose; // complete SVG
+    return svgString;
+}
 
-    // complete SVG diagram
-    svgString += svgClose;
+export function generateMoonSvg(options: moonSvgOptions) {
+    const {sunEvents,moonIntervals,timeZone,newMoons,fullMoons,svgWidth=1100,svgHeight=550,leftPadding=25,rightPadding=10,
+    topPadding=10,bottomPadding=25,textSize=11,font="Arial",language="en",gridInterval=2,gridlineWidth=0.5} = options;
+    const days = sunEvents.length; // 365 days for common years, 366 for leap years
+    const isLeapYear = (days == 366);
+    const nOptions = // normalized options
+    {...options,svgWidth,svgHeight,leftPadding,rightPadding,topPadding,bottomPadding,textSize,font,language,gridInterval,gridlineWidth};
+    
+    function toPolygons(intervals: number[][][], color: string): string[] {
+        const polygons = mf.intervalsToPolygon(intervals);
+        for (const polygon of polygons) {
+            for (const point of polygon) {coordinateTransform(point, nOptions);}
+        }
+        const strings: string[] = [];
+        for (const polygon of polygons) {strings.push(polygonFromArray(polygon, color));}
+        return strings;
+    }
+
+    // generate SVG opening and background
+    const imageWidth = svgWidth + leftPadding + rightPadding;
+    const imageHeight = svgHeight + topPadding + bottomPadding;
+    let svgString = svgOpen(imageWidth, imageHeight);
+    svgString += rectangleSvg(0, 0, imageWidth, imageHeight, "#ffffff"); // white background
+
+    const nIntervals: number[][][] = [];
+    const cIntervals: number[][][] = [];
+    for (let i=0; i<sunEvents.length; i++) {
+        const [nIntervalsI, cIntervalsI] = intervalsNightCivilTwilight(sunEvents[i], timeZone);
+        nIntervals.push(nIntervalsI);
+        cIntervals.push(cIntervalsI);
+    }
+    const nPolygons = toPolygons(nIntervals, "rgba(0, 0, 0, 0.5)");
+    const cPolygons = toPolygons(cIntervals, "rgba(0, 0, 0, 0.25)");
+    
+    const moonPolygons = toPolygons(moonIntervals, "#80c0ff");
+    const allPolygons = [...moonPolygons, ...nPolygons, ...cPolygons];
+    for (const polygon of allPolygons) {svgString += polygon;}
+
+    // draw lines for new and full moons
+    for (const date of newMoons) {
+        const newYear = DateTime.fromISO(`${date.year}-01-01`, {zone: date.zone});
+        const x = date.diff(newYear, ['days', 'hours']).days;
+        const lines: mf.Point[][] = [];
+        for (const interval of moonIntervals[x]) {
+            lines.push([[x, interval[0]], [x, interval[1]]]);
+        }
+        for (const line of lines) {
+            coordinateTransform(line[0], nOptions, true);
+            coordinateTransform(line[1], nOptions, true);
+            svgString += lineSvg(line[0], line[1], "#ff0000", 1);
+        }
+    }
+    for (const date of fullMoons) {
+        const newYear = DateTime.fromISO(`${date.year}-01-01`, {zone: date.zone});
+        const x = date.diff(newYear, ['days', 'hours']).days;
+        const lines: mf.Point[][] = [];
+        for (const interval of moonIntervals[x]) {
+            lines.push([[x, interval[0]], [x, interval[1]]]);
+        }
+        for (const line of lines) {
+            coordinateTransform(line[0], nOptions, true);
+            coordinateTransform(line[1], nOptions, true);
+            svgString += lineSvg(line[0], line[1], "#000080", 1);
+        }
+    }
+
+    // draw y-axis and gridlines
+    for (let i=0; i<=24; i+=gridInterval) {
+        const y = topPadding + (1-i/24) * svgHeight;
+        svgString += textSvg(String(i), leftPadding-5, y, textSize, font, "#000000", "end", "middle");
+        svgString += lineSvg([leftPadding, y], [leftPadding+svgWidth, y], "#000000", gridlineWidth);
+    }
+
+    // draw x-axis and gridlines
+    for (let i=0; i<12; i++) {
+        const x = monthEdges(isLeapYear)[i];
+        const xText = (x + monthEdges(isLeapYear)[i+1])/2;
+        const p1: mf.Point = [x, DAY_LENGTH], p2: mf.Point = [x, 0], pText: mf.Point = [xText, 0];
+        coordinateTransform(p1, nOptions);
+        coordinateTransform(p2, nOptions);
+        coordinateTransform(pText, nOptions);
+        svgString += textSvg(months(language)[i], pText[0], pText[1]+12, textSize, font, "#000000", "middle", "middle");
+        svgString += lineSvg(p1, p2, "#000000", gridlineWidth);
+    }
+    svgString += lineSvg([leftPadding+svgWidth, topPadding], [leftPadding+svgWidth, topPadding+svgHeight], 
+        "#000000", gridlineWidth); // right boundary of diagram
+    svgString += svgClose; // complete SVG
     return svgString;
 }

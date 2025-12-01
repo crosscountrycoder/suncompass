@@ -1,6 +1,7 @@
 import {DateTime} from "luxon";
 import * as mf from "./mathfuncs.ts";
 import {sunTrueLong, sunDistance, obliquity} from "./suncalc.ts";
+import {illumination} from "./mooncalc.ts";
 import { DAY_LENGTH } from "./constants.ts";
 
 /** Object representing the change in a location's time zone. 
@@ -16,7 +17,7 @@ export type TimeChange = {unix: number; offset: number; change: boolean};
  * @param obliquity Obliquity of ecliptic in degrees.
  * @param distance Sun-earth distance in kilometers.
  */
-export type LODProfile = {unix: number, longitude: number, obliquity: number, distance: number};
+export type LODProfile = {unix: number; longitude: number; obliquity: number; distance: number};
 
 /** Object represents an event involving the sun or moon. 
  * @param unix Unix timestamp in milliseconds.
@@ -106,11 +107,10 @@ export function getTimeOfDay(unix: number, zone: TimeChange[]): number {
  * @param twentyFourHours Whether to print time in 12-hour or 24-hour format.
  * @returns A string representing the solar event, printable using console.log or process.stdout.write.
  */
-export function sunEventString(event: SEvent, zoneTable: TimeChange[], twentyFourHours = false) 
-{
+export function sunEventString(event: SEvent, zoneTable: TimeChange[], twentyFourHours = false): string {
     const eventType = event.type.padStart(14);
-    const timeOfDayS = Math.floor(getTimeOfDay(event.unix, zoneTable));
-    const timeString = mf.convertToHMS(timeOfDayS, twentyFourHours);
+    const timeOfDay = Math.floor(getTimeOfDay(event.unix, zoneTable));
+    const timeString = mf.convertToHMS(timeOfDay, twentyFourHours);
     const elevStr = mf.refract(event.elev).toFixed(4) + "°";
     const azStr = (event.azimuth.toFixed(4) + "° " + mf.direction(event.azimuth).padStart(3));
     const eventStr = `${eventType} | ${timeString.padStart(11)} | ${elevStr.padStart(9)} | ${azStr.padStart(13)}`;
@@ -123,5 +123,33 @@ export function sunEventString(event: SEvent, zoneTable: TimeChange[], twentyFou
     const boldStr = "\x1b[1m";
     const resetStr = "\x1b[0m";
     if (bold) {return colorStr + boldStr + eventStr + resetStr;}
-    else {return colorStr + eventStr + resetStr}
+    else {return colorStr + eventStr + resetStr;}
+}
+
+/**
+ * Converts the moon event to a string (printable using console.log or process.stdout.write).
+ * @param event The event as an SEvent object, with the Unix timestamp and event type.
+ * @param zoneTable Time zone lookup table.
+ * @param twentyFourHours Whether to print time in 12-hour or 24-hour format.
+ * @returns A string representing the solar event, printable using console.log or process.stdout.write.
+ */
+export function moonEventString(event: SEvent, zoneTable: TimeChange[], twentyFourHours = false): string {
+    const eventType = event.type.padStart(16);
+    const timeOfDay = Math.floor(getTimeOfDay(event.unix, zoneTable));
+    const timeString = mf.convertToHMS(timeOfDay, twentyFourHours);
+    const elevStr = mf.refract(event.elev).toFixed(4) + "°";
+    const azStr = (event.azimuth.toFixed(4) + "° " + mf.direction(event.azimuth).padStart(3));
+    const illum = illumination(event.unix);
+    const illumStr = (100*illum).toFixed(2) + "%";
+    const eventStr = `${eventType} | ${timeString.padStart(11)} | ${elevStr.padStart(9)} | ${azStr.padStart(13)} | ${illumStr.padStart(12)}`;
+
+    const bold = event.type == "Moonrise" || event.type == "Moonset" || event.type == "Meridian Passing";
+    let [r, g, b] = [128, 128, 128];
+    if (event.type == "Moonrise" || event.type == "Moonset") {[r, g, b] = [255, 255, 0];}
+    else if (event.elev >= -5/6) {[r, g, b] = [255, 255, 255];}
+    const colorStr = `\x1b[38;2;${r};${g};${b}m`;
+    const boldStr = "\x1b[1m";
+    const resetStr = "\x1b[0m";
+    if (bold) {return colorStr + boldStr + eventStr + resetStr;}
+    else {return colorStr + eventStr + resetStr;}
 }
