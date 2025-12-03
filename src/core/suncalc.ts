@@ -18,7 +18,7 @@ the time zone of a geographic coordinate.
 */
 
 import * as mf from "./mathfuncs.ts";
-import {degToRad, sunPeriodicTerms, DAY_LENGTH, BSEARCH_GAP} from "./constants.ts";
+import {degToRad, sunPeriodicTerms, DAY_LENGTH} from "./constants.ts";
 import {generateLODProfile, estimateLOD, getTimeOfDay} from "./lookup-tables.ts";
 import type {TimeChange, LODProfile, SEvent} from "./lookup-tables.ts";
 import {DateTime} from "luxon";
@@ -374,18 +374,16 @@ export function dawn(lat: number, long: number, angle: number, type: string, max
     for (let i=0; i<maxMin.length-1; i++) {
         let t0 = maxMin[i], t1 = maxMin[i+1];
         const lod0 = estimateLOD(t0, startLOD, endLOD), lod1 = estimateLOD(t1, startLOD, endLOD);
-        let s0 = sunPosition(lat, long, lod0)[0], s1 = sunPosition(lat, long, lod1)[0];
-        if (s0 <= angle && s1 >= angle) {
-            while (t1 - t0 > BSEARCH_GAP) {
+        let [e0, a0] = sunPosition(lat, long, lod0);
+        let [e1, a1] = sunPosition(lat, long, lod1);
+        if (e0 <= angle && e1 >= angle) {
+            while (t1 - t0 > 1) {
                 const avgLOD = estimateLOD(Math.floor((t0+t1)/2), startLOD, endLOD);
-                const sAvg = sunPosition(lat, long, avgLOD)[0];
-                if (sAvg <= angle) {t0 = avgLOD.unix; s0 = sAvg;}
-                else {t1 = avgLOD.unix; s1 = sAvg;}
+                const [eAvg, aAvg] = sunPosition(lat, long, avgLOD);
+                if (eAvg <= angle) {t0 = avgLOD.unix; e0 = eAvg; a0 = aAvg;}
+                else {t1 = avgLOD.unix; e1 = eAvg; a1 = aAvg;}
             }
-            const f = (angle - s0) / (s1 - s0);
-            const t = Math.floor(t0 + f * (t1 - t0));
-            const [e, a] = sunPosition(lat, long, estimateLOD(t,startLOD,endLOD));
-            dawnTimes.push({unix: t, type: type, elev: e, azimuth: a});
+            dawnTimes.push({unix: t0, type: type, elev: e0, azimuth: a0});
         }
     }
     return dawnTimes;
@@ -408,18 +406,16 @@ export function dusk(lat: number, long: number, angle: number, type: string, max
     for (let i=0; i<maxMin.length-1; i++) {
         let t0 = maxMin[i], t1 = maxMin[i+1];
         const lod0 = estimateLOD(t0, startLOD, endLOD), lod1 = estimateLOD(t1, startLOD, endLOD);
-        let s0 = sunPosition(lat, long, lod0)[0], s1 = sunPosition(lat, long, lod1)[0];
-        if (s0 >= angle && s1 <= angle) {
-            while (t1 - t0 > BSEARCH_GAP) {
+        let [e0, a0] = sunPosition(lat, long, lod0);
+        let [e1, a1] = sunPosition(lat, long, lod1);
+        if (e0 >= angle && e1 <= angle) {
+            while (t1 - t0 > 1) {
                 const avgLOD = estimateLOD(Math.floor((t0+t1)/2), startLOD, endLOD);
-                const sAvg = sunPosition(lat, long, avgLOD)[0];
-                if (sAvg >= angle) {t0 = avgLOD.unix; s0 = sAvg;}
-                else {t1 = avgLOD.unix; s1 = sAvg;}
+                const [eAvg, aAvg] = sunPosition(lat, long, avgLOD);
+                if (eAvg >= angle) {t0 = avgLOD.unix; e0 = eAvg; a0 = aAvg;}
+                else {t1 = avgLOD.unix; e1 = eAvg; a1 = aAvg;}
             }
-            const f = (angle - s0) / (s1 - s0);
-            const t = Math.floor(t0 + f * (t1 - t0));
-            const [e, a] = sunPosition(lat, long, estimateLOD(t,startLOD,endLOD));
-            duskTimes.push({unix: t, type: type, elev: e, azimuth: a});
+            duskTimes.push({unix: t0, type: type, elev: e0, azimuth: a0});
         }
     }
     return duskTimes;
