@@ -256,14 +256,14 @@ export function moonrise(lat: number, long: number, maxMin: number[], angle: num
     const riseTimes = [];
     for (let i=0; i<maxMin.length-1; i++) {
         let t0 = maxMin[i], t1 = maxMin[i+1];
-        let [e0, a0] = moonPosition(lat, long, t0);
-        let [e1, a1] = moonPosition(lat, long, t1);
+        let e0 = moonPosition(lat, long, t0)[0];
+        let e1 = moonPosition(lat, long, t1)[0];
         if (e0 <= angle && e1 >= angle) {
             while (t1 - t0 > BSEARCH_GAP) {
                 const tAvg = Math.floor((t0+t1)/2);
-                const [eAvg, aAvg] = moonPosition(lat, long, tAvg);
-                if (eAvg <= angle) {t0 = tAvg; e0 = eAvg; a0 = aAvg;}
-                else {t1 = tAvg; e1 = eAvg; a1 = aAvg;}
+                const eAvg = moonPosition(lat, long, tAvg)[0];
+                if (eAvg <= angle) {t0 = tAvg; e0 = eAvg;}
+                else {t1 = tAvg; e1 = eAvg;}
             }
             const f = (angle - e0) / (e1 - e0);
             const t = Math.floor(t0 + f * (t1 - t0));
@@ -286,14 +286,14 @@ export function moonset(lat: number, long: number, maxMin: number[], angle: numb
     const setTimes = [];
     for (let i=0; i<maxMin.length-1; i++) {
         let t0 = maxMin[i], t1 = maxMin[i+1];
-        let [e0, a0] = moonPosition(lat, long, t0);
-        let [e1, a1] = moonPosition(lat, long, t1);
+        let e0 = moonPosition(lat, long, t0)[0];
+        let e1 = moonPosition(lat, long, t1)[0];
         if (e0 >= angle && e1 <= angle) {
             while (t1 - t0 > BSEARCH_GAP) {
                 const tAvg = Math.floor((t0+t1)/2);
-                const [eAvg, aAvg] = moonPosition(lat, long, tAvg);
-                if (eAvg >= angle) {t0 = tAvg; e0 = eAvg; a0 = aAvg;}
-                else {t1 = tAvg; e1 = eAvg; a1 = aAvg;}
+                const eAvg = moonPosition(lat, long, tAvg)[0];
+                if (eAvg >= angle) {t0 = tAvg; e0 = eAvg;}
+                else {t1 = tAvg; e1 = eAvg;}
             }
             const f = (angle - e0) / (e1 - e0);
             const t = Math.floor(t0 + f * (t1 - t0));
@@ -357,7 +357,7 @@ export function moonPhase(lat: number, long: number, start: number, end: number)
     const diff1 = moonSunLongDiff(end);
     if (diff0 > 180 && diff1 < 180) { // new moon
         let t0 = start, t1 = end;
-        while (t1 - t0 > 1) {
+        while (t1 - t0 > BSEARCH_GAP) {
             const avg = Math.floor((t0+t1)/2);
             (moonSunLongDiff(avg) > 180) ? (t0 = avg) : (t1 = avg);
         }
@@ -366,7 +366,7 @@ export function moonPhase(lat: number, long: number, start: number, end: number)
     }
     else if (diff0 <= 90 && diff1 >= 90) { // first quarter
         let t0 = start, t1 = end;
-        while (t1 - t0 > 1) {
+        while (t1 - t0 > BSEARCH_GAP) {
             const avg = Math.floor((t0+t1)/2);
             (moonSunLongDiff(avg) <= 90) ? (t0 = avg) : (t1 = avg);
         }
@@ -375,7 +375,7 @@ export function moonPhase(lat: number, long: number, start: number, end: number)
     }
     else if (diff0 <= 180 && diff1 >= 180) { // full moon
         let t0 = start, t1 = end;
-        while (t1 - t0 > 1) {
+        while (t1 - t0 > BSEARCH_GAP) {
             const avg = Math.floor((t0+t1)/2);
             (moonSunLongDiff(avg) <= 180) ? (t0 = avg) : (t1 = avg);
         }
@@ -384,7 +384,7 @@ export function moonPhase(lat: number, long: number, start: number, end: number)
     }
     else if (diff0 <= 270 && diff1 >= 270) { // last quarter
         let t0 = start, t1 = end;
-        while (t1 - t0 > 1) {
+        while (t1 - t0 > BSEARCH_GAP) {
             const avg = Math.floor((t0+t1)/2);
             (moonSunLongDiff(avg) <= 270) ? (t0 = avg) : (t1 = avg);
         }
