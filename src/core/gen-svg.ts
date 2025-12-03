@@ -158,8 +158,8 @@ function coordinateTransform(point: mf.Point, options: sunSvgOptions | moonSvgOp
  * @param type Set to "length" to generate a day/night/twilight length chart, or "rise-set" to generate a chart with times of day.
  * @param timeZone Time zone, either as an IANA string or a lookup table (see mathfuncs.timeZoneLookupTable)
  * @param solsticesEquinoxes Solstices and equinoxes for the given year, as an array of four DateTimes. They will appear as green lines on the diagram.
- * @param svgWidth Width of the chart (not the entire SVG file) in pixels. Defaults to 1100.
- * @param svgHeight Height of the chart (not the entire SVG file) in pixels. Defaults to 550.
+ * @param svgWidth Width of the chart (not the entire SVG file) in pixels. Defaults to 1000.
+ * @param svgHeight Height of the chart (not the entire SVG file) in pixels. Defaults to 500.
  * @param leftPadding Padding to the left of the carpet plot in pixels. Defaults to 25.
  * @param rightPadding Padding to the right of the carpet plot in pixels. Defaults to 10.
  * @param topPadding Padding above the carpet plot in pixels. Defaults to 10.
@@ -174,7 +174,7 @@ function coordinateTransform(point: mf.Point, options: sunSvgOptions | moonSvgOp
  * bottomPadding.
  */
 export function generateSunSvg(options: sunSvgOptions): string {
-    const {events,type,timeZone,solsticesEquinoxes,svgWidth=1100,svgHeight=550,leftPadding=25,rightPadding=10,
+    const {events,type,timeZone,solsticesEquinoxes,svgWidth=1000,svgHeight=500,leftPadding=25,rightPadding=10,
         topPadding=10,bottomPadding=25,textSize=11,font="Arial",language="en",gridInterval=2,gridlineWidth=0.5} = options;
     const days = events.length; // 365 days for common years, 366 for leap years
     const isLeapYear = (days == 366);
@@ -370,7 +370,7 @@ export function generateSunSvg(options: sunSvgOptions): string {
 }
 
 export function generateMoonSvg(options: moonSvgOptions) {
-    const {sunEvents,moonIntervals,timeZone,newMoons,fullMoons,svgWidth=1100,svgHeight=550,leftPadding=25,rightPadding=10,
+    const {sunEvents,moonIntervals,timeZone,newMoons,fullMoons,svgWidth=1000,svgHeight=500,leftPadding=25,rightPadding=10,
     topPadding=10,bottomPadding=25,textSize=11,font="Arial",language="en",gridInterval=2,gridlineWidth=0.5} = options;
     const days = sunEvents.length; // 365 days for common years, 366 for leap years
     const isLeapYear = (days == 366);
