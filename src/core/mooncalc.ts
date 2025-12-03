@@ -259,13 +259,16 @@ export function moonrise(lat: number, long: number, maxMin: number[], angle: num
         let [e0, a0] = moonPosition(lat, long, t0);
         let [e1, a1] = moonPosition(lat, long, t1);
         if (e0 <= angle && e1 >= angle) {
-            while (t1 - t0 > 1) {
+            while (t1 - t0 > 1000) {
                 const tAvg = Math.floor((t0+t1)/2);
                 const [eAvg, aAvg] = moonPosition(lat, long, tAvg);
                 if (eAvg <= angle) {t0 = tAvg; e0 = eAvg; a0 = aAvg;}
                 else {t1 = tAvg; e1 = eAvg; a1 = aAvg;}
             }
-            riseTimes.push({unix: t0, type: "Moonrise", elev: e0, azimuth: a0});
+            const f = (angle - e0) / (e1 - e0);
+            const t = Math.floor(t0 + f * (t1 - t0));
+            const [e, a] = moonPosition(lat, long, t);
+            riseTimes.push({unix: t, type: "Moonrise", elev: e, azimuth: a});
         }
     }
     return riseTimes;
@@ -286,13 +289,16 @@ export function moonset(lat: number, long: number, maxMin: number[], angle: numb
         let [e0, a0] = moonPosition(lat, long, t0);
         let [e1, a1] = moonPosition(lat, long, t1);
         if (e0 >= angle && e1 <= angle) {
-            while (t1 - t0 > 1) {
+            while (t1 - t0 > 1000) {
                 const tAvg = Math.floor((t0+t1)/2);
                 const [eAvg, aAvg] = moonPosition(lat, long, tAvg);
                 if (eAvg >= angle) {t0 = tAvg; e0 = eAvg; a0 = aAvg;}
                 else {t1 = tAvg; e1 = eAvg; a1 = aAvg;}
             }
-            setTimes.push({unix: t0, type: "Moonset", elev: e0, azimuth: a0});
+            const f = (angle - e0) / (e1 - e0);
+            const t = Math.floor(t0 + f * (t1 - t0));
+            const [e, a] = moonPosition(lat, long, t);
+            setTimes.push({unix: t, type: "Moonset", elev: e, azimuth: a});
         }
     }
     return setTimes;
