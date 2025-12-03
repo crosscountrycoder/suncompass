@@ -2,7 +2,7 @@
 
 import * as mf from "./mathfuncs.ts";
 import * as sc from "./suncalc.ts";
-import {DAY_LENGTH, degToRad, moonPtl, moonPtld} from "./constants.ts";
+import {BSEARCH_GAP, DAY_LENGTH, degToRad, moonPtl, moonPtld} from "./constants.ts";
 import { getTimeOfDay, type SEvent, type TimeChange } from "./lookup-tables.ts";
 import type { DateTime } from "luxon";
 
@@ -259,7 +259,7 @@ export function moonrise(lat: number, long: number, maxMin: number[], angle: num
         let [e0, a0] = moonPosition(lat, long, t0);
         let [e1, a1] = moonPosition(lat, long, t1);
         if (e0 <= angle && e1 >= angle) {
-            while (t1 - t0 > 1000) {
+            while (t1 - t0 > BSEARCH_GAP) {
                 const tAvg = Math.floor((t0+t1)/2);
                 const [eAvg, aAvg] = moonPosition(lat, long, tAvg);
                 if (eAvg <= angle) {t0 = tAvg; e0 = eAvg; a0 = aAvg;}
@@ -289,7 +289,7 @@ export function moonset(lat: number, long: number, maxMin: number[], angle: numb
         let [e0, a0] = moonPosition(lat, long, t0);
         let [e1, a1] = moonPosition(lat, long, t1);
         if (e0 >= angle && e1 <= angle) {
-            while (t1 - t0 > 1000) {
+            while (t1 - t0 > BSEARCH_GAP) {
                 const tAvg = Math.floor((t0+t1)/2);
                 const [eAvg, aAvg] = moonPosition(lat, long, tAvg);
                 if (eAvg >= angle) {t0 = tAvg; e0 = eAvg; a0 = aAvg;}
