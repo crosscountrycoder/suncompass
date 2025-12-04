@@ -84,10 +84,9 @@ for (let i=0; i<dateList.length-1; i++) {
     const startUnix = mf.ms(dateList[i]), endUnix = mf.ms(dateList[i+1]);
     const curDayMoonEvents = allMoonEvents(lat, long, startUnix, endUnix);
     const curDayIntervals = moonIntervals(lat, long, startUnix, curDayMoonEvents, tzLookupTable);
-    const phase = moonPhase(lat, long, startUnix, endUnix);
-    if (phase !== null) {
-        if (phase.type == "New Moon") {newMoons.push(DateTime.fromMillis(phase.unix, {zone: timeZone}));}
-        else if (phase.type == "Full Moon") {fullMoons.push(DateTime.fromMillis(phase.unix, {zone: timeZone}));}
+    for (const event of curDayMoonEvents) {
+        if (event.type == "New Moon") {newMoons.push(DateTime.fromMillis(event.unix, {zone: timeZone}));}
+        else if (event.type == "Full Moon") {fullMoons.push(DateTime.fromMillis(event.unix, {zone: timeZone}));}
     }
     moonEvents.push(curDayMoonEvents);
     moonInts.push(curDayIntervals);
