@@ -15,7 +15,7 @@ import path from "path";
 let year: number;
 let zone: string;
 
-type RawSeasonRecord = {year: number; marEquinox: number; junSolstice: number; sepEquinox: number; decSolstice: number;};
+type RawSeasonRecord = {year: number; marEquinox: string; junSolstice: string; sepEquinox: string; decSolstice: string;};
 function solsticesEquinoxes(): RawSeasonRecord[] {
   const jsonPath = path.join("public", "data", "solstices_equinoxes.json");
   const raw = fs.readFileSync(jsonPath, "utf8");
@@ -30,10 +30,10 @@ else {zone = args[3];}
 
 const obj = solsticesEquinoxes()[year];
 const [mar, jun, sep, dec] = [
-    DateTime.fromMillis(obj.marEquinox, {zone: zone}), 
-    DateTime.fromMillis(obj.junSolstice, {zone: zone}), 
-    DateTime.fromMillis(obj.sepEquinox, {zone: zone}), 
-    DateTime.fromMillis(obj.decSolstice, {zone: zone})
+    DateTime.fromISO(obj.marEquinox, {zone: zone}), 
+    DateTime.fromISO(obj.junSolstice, {zone: zone}), 
+    DateTime.fromISO(obj.sepEquinox, {zone: zone}), 
+    DateTime.fromISO(obj.decSolstice, {zone: zone})
 ];
 const [marSSP, junSSP, sepSSP, decSSP] = [
     subsolarPoint(generateLODProfile(ms(mar))),
