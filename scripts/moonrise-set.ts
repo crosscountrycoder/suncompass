@@ -45,6 +45,7 @@ else {
     const apparentElev = mf.refract(elev);
     const distance = mc.moonDistance(mf.ms(date), true);
     const illumination = mc.illumination(mf.ms(date));
+    const phase = mc.moonPhaseDay(mf.ms(date.startOf("day")), mf.ms(date.startOf("day").plus({days: 1})));
     
     console.log(zone);
     console.log(`${date.toLocaleString(DateTime.DATETIME_FULL_WITH_SECONDS)}`);
@@ -53,6 +54,7 @@ else {
     console.log(`Sublunar point: ${sublunarLat.toFixed(4)}, ${sublunarLong.toFixed(4)}`);
     console.log(`Moon-Earth distance: ${Math.round(distance)} km (${Math.round(distance/1.609344)} mi)`);
     console.log(`Illumination: ${(100*illumination).toFixed(2)}%`);
+    console.log(`Phase: ${phase}`);
     console.log();
 
     const lunarEvents = mc.moonEventsDay(lat, long, date);

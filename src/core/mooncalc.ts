@@ -388,6 +388,22 @@ export function moonPhase(lat: number, long: number, start: number, end: number)
     else {return null;}
 }
 
+/**
+ * Returns the moon phase on a given day.
+ * @param start Start of the day in Unix milliseconds
+ * @param end End of the day in Unix milliseconds
+ * @returns A string. Either "New Moon", "Waxing Crescent", "First Quarter", "Waxing Gibbous", "Full Moon",
+ * "Waning Gibbous", "Last Quarter", or "Waning Crescent".
+ */
+export function moonPhaseDay(start: number, end: number): string {
+    const diff0 = moonSunLongDiff(start);
+    const diff1 = moonSunLongDiff(end);
+    if (diff0 <= 90) {return (diff1 >= 90) ? "First Quarter" : "Waxing Crescent";}
+    else if (diff0 <= 180) {return (diff1 >= 180) ? "Full Moon" : "Waxing Gibbous";}
+    else if (diff0 <= 270) {return (diff1 >= 270) ? "Last Quarter" : "Waning Gibbous";}
+    else {return (diff1 < diff0) ? "New Moon" : "Waning Crescent";}
+}
+
 /** Returns all moonrises, moonsets, meridian passings, full moons, new moons, and first/last quarters on a given day. */
 export function allMoonEvents(lat: number, long: number, start: number, end: number): SEvent[] {
     const maxMin = moonMaxMin(lat, long, start, end);
