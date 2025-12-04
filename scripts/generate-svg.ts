@@ -8,7 +8,7 @@ import { timeZoneLookupTable, longDistLookupTable } from "../src/core/lookup-tab
 import path from "path";
 import { allMoonEvents, moonIntervals, moonPhase } from "../src/core/mooncalc.ts";
 
-type RawSeasonRecord = {year: number; marEquinox: number; junSolstice: number; sepEquinox: number; decSolstice: number;};
+type RawSeasonRecord = {year: number; marEquinox: string; junSolstice: string; sepEquinox: string; decSolstice: string;};
 function solsticesEquinoxes(): RawSeasonRecord[] {
     const jsonPath = path.join("public", "data", "solstices_equinoxes.json");
     const raw = fs.readFileSync(jsonPath, "utf8");
@@ -59,10 +59,10 @@ for (let i=0; i<dateList.length-1; i++) {
 
 const solstEq = solsticesEquinoxes();
 const solstEqDT = [
-    DateTime.fromMillis(solstEq[year].marEquinox, {zone: timeZone}),
-    DateTime.fromMillis(solstEq[year].junSolstice, {zone: timeZone}),
-    DateTime.fromMillis(solstEq[year].sepEquinox, {zone: timeZone}),
-    DateTime.fromMillis(solstEq[year].decSolstice, {zone: timeZone}),
+    DateTime.fromISO(solstEq[year].marEquinox, {zone: timeZone}),
+    DateTime.fromISO(solstEq[year].junSolstice, {zone: timeZone}),
+    DateTime.fromISO(solstEq[year].sepEquinox, {zone: timeZone}),
+    DateTime.fromISO(solstEq[year].decSolstice, {zone: timeZone}),
 ]
 
 // Generate day length SVG
