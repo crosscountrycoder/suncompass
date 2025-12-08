@@ -594,10 +594,10 @@ export function intervalsSvg(sunEvents: SEvent[], timeZone: TimeChange[]): numbe
     if (newSunEvents.length == 0) { // no sunrise, sunset, dawn, or dusk
         const s = sunEvents[0].elev;
         if (s < -18) {return [[], [], [], []];}
-        else if (s < -12) {return [[], [], [], [[0, DAY_LENGTH]]];}
-        else if (s < -6) {return [[], [], [[0, DAY_LENGTH]], [[0, DAY_LENGTH]]];}
-        else if (s < -5/6) {return [[], [[0, DAY_LENGTH]], [[0, DAY_LENGTH]], [[0, DAY_LENGTH]]];}
-        else {return [[[0, DAY_LENGTH]], [[0, DAY_LENGTH]], [[0, DAY_LENGTH]], [[0, DAY_LENGTH]]];}
+        else if (s < -12) {return [[], [], [], [[0, 86400]]];}
+        else if (s < -6) {return [[], [], [[0, 86400]], [[0, 86400]]];}
+        else if (s < -5/6) {return [[], [[0, 86400]], [[0, 86400]], [[0, 86400]]];}
+        else {return [[[0, 86400]], [[0, 86400]], [[0, 86400]], [[0, 86400]]];}
     }
 
     const dIntervals: number[][] = []; // intervals of daylight
@@ -606,50 +606,50 @@ export function intervalsSvg(sunEvents: SEvent[], timeZone: TimeChange[]): numbe
     const aIntervals: number[][] = []; // daylight + civil twilight + nautical twilight + astronomical twilight
     
     let etype = newSunEvents[0].type;
-    let ms = getTimeOfDay(newSunEvents[0].unix, timeZone);
+    let s = mf.intDiv(getTimeOfDay(newSunEvents[0].unix, timeZone),1000);
 
     // push the first interval
     if (etype == "Astro Dawn") {
-        aIntervals.push([ms, DAY_LENGTH]);
+        aIntervals.push([s, 86400]);
     } else if (etype == "Nautical Dawn") {
-        aIntervals.push([0, DAY_LENGTH]);
-        nIntervals.push([ms, DAY_LENGTH]);
+        aIntervals.push([0, 86400]);
+        nIntervals.push([s, 86400]);
     } else if (etype == "Civil Dawn") {
-        aIntervals.push([0, DAY_LENGTH]);
-        nIntervals.push([0, DAY_LENGTH]);
-        cIntervals.push([ms, DAY_LENGTH]);
+        aIntervals.push([0, 86400]);
+        nIntervals.push([0, 86400]);
+        cIntervals.push([s, 86400]);
     } else if (etype == "Sunrise") {
-        aIntervals.push([0, DAY_LENGTH]);
-        nIntervals.push([0, DAY_LENGTH]);
-        cIntervals.push([0, DAY_LENGTH]);
-        dIntervals.push([ms, DAY_LENGTH]);
+        aIntervals.push([0, 86400]);
+        nIntervals.push([0, 86400]);
+        cIntervals.push([0, 86400]);
+        dIntervals.push([s, 86400]);
     } else if (etype == "Sunset") {
-        aIntervals.push([0, DAY_LENGTH]);
-        nIntervals.push([0, DAY_LENGTH]);
-        cIntervals.push([0, DAY_LENGTH]);
-        dIntervals.push([0, ms]);
+        aIntervals.push([0, 86400]);
+        nIntervals.push([0, 86400]);
+        cIntervals.push([0, 86400]);
+        dIntervals.push([0, s]);
     } else if (etype == "Civil Dusk") {
-        aIntervals.push([0, DAY_LENGTH]);
-        nIntervals.push([0, DAY_LENGTH]);
-        cIntervals.push([0, ms]);
+        aIntervals.push([0, 86400]);
+        nIntervals.push([0, 86400]);
+        cIntervals.push([0, s]);
     } else if (etype == "Nautical Dusk") {
-        aIntervals.push([0, DAY_LENGTH]);
-        nIntervals.push([0, ms]);
+        aIntervals.push([0, 86400]);
+        nIntervals.push([0, s]);
     } else if (etype == "Astro Dusk") {
-        aIntervals.push([0, ms]);
+        aIntervals.push([0, s]);
     }
 
     for (let i=1; i<newSunEvents.length; i++) {
         etype = newSunEvents[i].type;
-        ms = getTimeOfDay(newSunEvents[i].unix, timeZone);
-        if (etype == "Astro Dawn") {aIntervals.push([ms, DAY_LENGTH]);}
-        else if (etype == "Nautical Dawn") {nIntervals.push([ms, DAY_LENGTH]);}
-        else if (etype == "Civil Dawn") {cIntervals.push([ms, DAY_LENGTH]);}
-        else if (etype == "Sunrise") {dIntervals.push([ms, DAY_LENGTH]);}
-        else if (etype == "Sunset") {dIntervals[dIntervals.length-1][1] = ms;}
-        else if (etype == "Civil Dusk") {cIntervals[cIntervals.length-1][1] = ms;}
-        else if (etype == "Nautical Dusk") {nIntervals[nIntervals.length-1][1] = ms;}
-        else if (etype == "Astro Dusk") {aIntervals[aIntervals.length-1][1] = ms;}
+        s = mf.intDiv(getTimeOfDay(newSunEvents[i].unix, timeZone),1000);
+        if (etype == "Astro Dawn") {aIntervals.push([s, 86400]);}
+        else if (etype == "Nautical Dawn") {nIntervals.push([s, 86400]);}
+        else if (etype == "Civil Dawn") {cIntervals.push([s, 86400]);}
+        else if (etype == "Sunrise") {dIntervals.push([s, 86400]);}
+        else if (etype == "Sunset") {dIntervals[dIntervals.length-1][1] = s;}
+        else if (etype == "Civil Dusk") {cIntervals[cIntervals.length-1][1] = s;}
+        else if (etype == "Nautical Dusk") {nIntervals[nIntervals.length-1][1] = s;}
+        else if (etype == "Astro Dusk") {aIntervals[aIntervals.length-1][1] = s;}
     }
 
     return [dIntervals, cIntervals, nIntervals, aIntervals];
@@ -662,8 +662,8 @@ export function intervalsNightCivilTwilight(sunEvents: SEvent[], timeZone: TimeC
     }
     if (newSunEvents.length == 0) {
         const s = sunEvents[0].elev;
-        if (s < -6) {return [[[0, DAY_LENGTH]], []];}
-        else if (s < -5/6) {return [[], [[0, DAY_LENGTH]]];}
+        if (s < -6) {return [[[0, 86400]], []];}
+        else if (s < -5/6) {return [[], [[0, 86400]]];}
         else {return [[], []];}
     }
 
@@ -671,38 +671,38 @@ export function intervalsNightCivilTwilight(sunEvents: SEvent[], timeZone: TimeC
     const cIntervals: number[][] = []; // civil twilight intervals
 
     let etype = newSunEvents[0].type;
-    let ms = getTimeOfDay(newSunEvents[0].unix, timeZone);
+    let s = mf.intDiv(getTimeOfDay(newSunEvents[0].unix, timeZone),1000);
     if (etype == "Civil Dawn") {
-        nIntervals.push([0, ms]);
-        cIntervals.push([ms, DAY_LENGTH]);
+        nIntervals.push([0, s]);
+        cIntervals.push([s, 86400]);
     }
     else if (etype == "Sunrise") {
-        cIntervals.push([0, ms]);
+        cIntervals.push([0, s]);
     }
     else if (etype == "Sunset") {
-        cIntervals.push([ms, DAY_LENGTH]);
+        cIntervals.push([s, 86400]);
     }
     else if (etype == "Civil Dusk") {
-        cIntervals.push([0, ms]);
-        nIntervals.push([ms, DAY_LENGTH]);
+        cIntervals.push([0, s]);
+        nIntervals.push([s, 86400]);
     }
 
     for (let i=1; i<newSunEvents.length; i++) {
         etype = newSunEvents[i].type;
-        ms = getTimeOfDay(newSunEvents[i].unix, timeZone);
+        s = mf.intDiv(getTimeOfDay(newSunEvents[i].unix, timeZone),1000);
         if (etype == "Civil Dawn") {
-            nIntervals[nIntervals.length-1][1] = ms;
-            cIntervals.push([ms, DAY_LENGTH]);
+            nIntervals[nIntervals.length-1][1] = s;
+            cIntervals.push([s, 86400]);
         }
         else if (etype == "Sunrise") {
-            cIntervals[cIntervals.length-1][1] = ms;
+            cIntervals[cIntervals.length-1][1] = s;
         }
         else if (etype == "Sunset") {
-            cIntervals.push([ms, DAY_LENGTH]);
+            cIntervals.push([s, 86400]);
         }
         else if (etype == "Civil Dusk") {
-            cIntervals[cIntervals.length-1][1] = ms;
-            nIntervals.push([ms, DAY_LENGTH]);
+            cIntervals[cIntervals.length-1][1] = s;
+            nIntervals.push([s, 86400]);
         }
     }
     return [nIntervals, cIntervals];
@@ -728,10 +728,10 @@ export function lengths(sunEvents: SEvent[], timeZone: TimeChange[]): number[] {
     if (newSunEvents.length == 0) { // no sunrise, sunset, dawn, or dusk
         const s = sunEvents[0].elev;
         if (s < -18) {return [0, 0, 0, 0];} // night all day
-        else if (s < -12) {return [0, 0, 0, DAY_LENGTH];} // astronomical twilight all day
-        else if (s < -6) {return [0, 0, DAY_LENGTH, DAY_LENGTH];} // nautical twilight all day
-        else if (s < -5/6) {return [0, DAY_LENGTH, DAY_LENGTH, DAY_LENGTH];} // civil twilight all day
-        else {return [DAY_LENGTH, DAY_LENGTH, DAY_LENGTH, DAY_LENGTH];} // daylight all day
+        else if (s < -12) {return [0, 0, 0, 86400];} // astronomical twilight all day
+        else if (s < -6) {return [0, 0, 86400, 86400];} // nautical twilight all day
+        else if (s < -5/6) {return [0, 86400, 86400, 86400];} // civil twilight all day
+        else {return [86400, 86400, 86400, 86400];} // daylight all day
     }
 
     let etype = newSunEvents[0].type;
@@ -756,8 +756,8 @@ export function lengths(sunEvents: SEvent[], timeZone: TimeChange[]): number[] {
     else if (etype == "Civil Dawn" || etype == "Sunset") {durations[1] += ms;}
     else if (etype == "Sunrise") {durations[0] += ms;}
 
-    return [durations[0], 
-    durations[0]+durations[1], 
-    durations[0]+durations[1]+durations[2],
-    durations[0]+durations[1]+durations[2]+durations[3]];
+    return [mf.intDiv(durations[0],1000), 
+    mf.intDiv(durations[0]+durations[1],1000), 
+    mf.intDiv(durations[0]+durations[1]+durations[2],1000),
+    mf.intDiv(durations[0]+durations[1]+durations[2]+durations[3],1000)];
 }
