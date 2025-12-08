@@ -7,7 +7,6 @@
 import {getTimeOfDay} from "./lookup-tables.ts";
 import * as mf from "./mathfuncs.ts";
 import {intervalsSvg, lengths, intervalsNightCivilTwilight} from "./suncalc.ts";
-import {DAY_LENGTH} from "./constants.ts";
 import {DateTime} from "luxon";
 import type {SEvent, TimeChange} from "./lookup-tables.ts";
 
@@ -58,27 +57,6 @@ type moonSvgOptions = {
 /** Generates the opening of an SVG */
 function svgOpen(width: number, height: number, viewBoxWidth: number, viewBoxHeight: number): string {
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${viewBoxWidth} ${viewBoxHeight}">\n`
-}
-
-/**
- * Generates SVG code for a polygon from an array of points, with the specified fill color, stroke color and stroke width
- * @param points An array of [x, y] points, ex: [[0, 0], [0, 100], [100, 0]]
- * @param fillColor Fill color of polygon.
- * @param strokeColor Stroke color of polygon.
- * @param strokeWidth Stroke width of polygon.
- * @param precision Number of digits after the decimal point to round pixel coordinates.
- * @returns SVG string for the given polygon.
- */
-function polygonFromArray(
-    points: mf.Polygon,
-    fillColor: string = "none",
-    strokeColor: string = "none",
-    strokeWidth: number = 0,
-    precision: number = 2,
-): string {
-    const simplifiedPoints = simplifyCollinear(points); 
-    const ptsAttr = simplifiedPoints.map(([x,y]) => `${mf.toFixedS(x,precision)},${mf.toFixedS(y,precision)}`).join(" "); // format the "x,y x,y ..." string
-    return `<polygon points="${ptsAttr}" fill="${fillColor}" stroke="${strokeColor}" stroke-width="${strokeWidth}"/>\n`;
 }
 
 /** Simplifies a polygon or polyline (represented as points) to remove collinear points. */
@@ -147,8 +125,8 @@ function textSvg(
 /** Generates an SVG line from (x1, y1) to (x2, y2) with the given color and width. */
 function lineSvg(p1: mf.Point, p2: mf.Point, color: string, width: number, precision: number = 2, nonScaling: boolean = false): string {
     return `<line x1="${mf.toFixedS(p1[0],precision)}" y1="${mf.toFixedS(p1[1],precision)}" x2="${mf.toFixedS(p2[0],precision)}"`
-    + ` y2="${mf.toFixedS(p2[1],precision)}" stroke="${color}" stroke-width="${width}" ` + 
-    (nonScaling ? `vector-effect="non-scaling-stroke"/>\n` : `/>\n`);
+    + ` y2="${mf.toFixedS(p2[1],precision)}" stroke="${color}" stroke-width="${width}"` + 
+    (nonScaling ? ` vector-effect="non-scaling-stroke"/>\n` : `/>\n`);
 }
 
 /** Returns an array of month abbreviations in the given language, represented by a language code, such as "en" (English), "es"
@@ -161,15 +139,6 @@ function months(language: string = "en"): string[] {
 function monthEdges(leapYear: boolean = false): number[] {
     if (leapYear) {return [0,31,60,91,121,152,182,213,244,274,305,335,366];}
     else {return [0,31,59,90,120,151,181,212,243,273,304,334,365];}
-}
-
-/** Transforms times of day and year into SVG diagram coordinates based on the image parameters. 
- * The point is transformed in place, and this function doesn't return anything. */
-function coordinateTransform(point: mf.Point, options: sunSvgOptions | moonSvgOptions, addOneHalf: boolean = false) {
-    const days = ("events" in options) ? options.events.length : options.sunEvents.length;
-    if (addOneHalf) {point[0] += 0.5;}
-    point[0] = options.leftPadding! + options.diagramWidth! * (point[0] / days);
-    point[1] = options.topPadding! + options.diagramHeight! * (1 - point[1] / DAY_LENGTH);
 }
 
 function generateGrid(options: sunSvgOptions | moonSvgOptions, gridlineColor: string) {
