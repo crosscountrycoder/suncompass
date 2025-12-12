@@ -317,8 +317,10 @@ function phaseAngle(unix: number): number {
     return i;
 }
 
-/** Returns the fraction of the Moon's disk that is illuminated. This ranges from 0 (new moon) to 1 (full moon), and is 0.5 at both
- * first and last quarters. */
+/** Returns the fraction of the Moon's disk that is illuminated. This ranges from 0 to 1.
+ * Note that illumination at full moon isn't exactly 1 because the moon's orbit is tilted relative to the ecliptic. Similarly, 
+ * illumination at new moon is not exactly 0. The closest values to 0 and 1 occur during solar and lunar eclipses, respectively.
+ */
 export function illumination(unix: number): number {
     return (1 + Math.cos(phaseAngle(unix))) / 2;
 }
