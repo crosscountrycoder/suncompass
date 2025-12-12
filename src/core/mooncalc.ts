@@ -3,7 +3,7 @@
 import * as mf from "./mathfuncs.ts";
 import * as sc from "./suncalc.ts";
 import {degToRad, moonPtl, moonPtld} from "./constants.ts";
-import { getTimeOfDay, type SEvent, type TimeChange } from "./lookup-tables.ts";
+import { generateLODProfile, getTimeOfDay, type SEvent, type TimeChange } from "./lookup-tables.ts";
 import type { DateTime } from "luxon";
 
 export function moonMeanLongitude(JC: number): number {
@@ -298,28 +298,22 @@ export function moonset(lat: number, long: number, maxMin: number[], angle: numb
     return setTimes;
 }
 
-/** Returns the phase angle of the moon given Unix time, in RADIANS (not degrees). 
- * This is based on Meeus's formula given in Astronomical Algorithms, chapter 46. 
+/** Returns the phase angle of the moon given Unix time, in RADIANS (not degrees).
+ * The value returned is the same as the phase angle i in Astronomical Algorithms, chapter 46. t is the angle between the
+ * sun-moon and earth-moon vectors.
 */
 function phaseAngle(unix: number): number {
-    const obliquity = sc.obliquity(unix, true) * degToRad;
-    const sunLongitude = sc.sunTrueLong(unix, true) * degToRad;
-    const sunDeclination = sc.declination(sunLongitude/degToRad, obliquity/degToRad) * degToRad;
-    const sunRA = Math.atan2(Math.sin(sunLongitude)*Math.cos(obliquity), Math.cos(sunLongitude)); // already in radians
+    const lodProfile = generateLODProfile(unix);
+    const [subsolarLat, subsolarLong] = sc.subsolarPoint(lodProfile);
+    const ecefSun = mf.toEcef(subsolarLat, subsolarLong, lodProfile.distance);
+    const ecefMoon = moonEcef(unix);
+    const sunVector = [ecefSun[0]-ecefMoon[0], ecefSun[1]-ecefMoon[1], ecefSun[2]-ecefMoon[2]];
+    const moonVector = [-ecefMoon[0], -ecefMoon[1], -ecefMoon[2]];
 
-    let [moonELat, moonELong] = moonLatLong(unix, true);
-    moonELat *= degToRad; moonELong *= degToRad;
-    const moonRA = Math.atan2(Math.sin(moonELong)*Math.cos(obliquity)-Math.tan(moonELat)*Math.sin(obliquity), Math.cos(moonELong)); // in radians
-    const moonDeclination = Math.asin(Math.sin(moonELat)*Math.cos(obliquity)+Math.cos(moonELat)*Math.sin(obliquity)*Math.sin(moonELong)); // in radians
-
-    const dRA = mf.mod(moonRA-sunRA+Math.PI, 2*Math.PI) - Math.PI;
-    const cosPsi = Math.sin(sunDeclination)*Math.sin(moonDeclination)+Math.cos(sunDeclination)*Math.cos(moonDeclination)*Math.cos(dRA);
-    const psi = Math.acos(mf.clamp(cosPsi)); // elongation
-    
-    const sunDistance = sc.sunDistance(unix, true);
-    const moonDist = moonDistance(unix, true);
-    const i = Math.atan2(sunDistance*Math.sin(psi), moonDist-sunDistance*Math.cos(psi));
-    
+    const dot = sunVector[0] * moonVector[0] + sunVector[1] * moonVector[1] + sunVector[2] * moonVector[2];
+    const normSun = Math.hypot(sunVector[0], sunVector[1], sunVector[2]);
+    const normMoon = Math.hypot(moonVector[0], moonVector[1], moonVector[2]);
+    const i = Math.acos(mf.clamp(dot / (normSun * normMoon)));
     return i;
 }
 
