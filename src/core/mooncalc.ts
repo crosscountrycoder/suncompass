@@ -299,7 +299,7 @@ export function moonset(lat: number, long: number, maxMin: number[], angle: numb
 }
 
 /** Returns the phase angle of the moon given Unix time, in RADIANS (not degrees).
- * The value returned is the same as the phase angle i in Astronomical Algorithms, chapter 46. t is the angle between the
+ * The value returned is the same as the phase angle i in Astronomical Algorithms, chapter 46. It is the angle between the
  * sun-moon and earth-moon vectors.
 */
 function phaseAngle(unix: number): number {
