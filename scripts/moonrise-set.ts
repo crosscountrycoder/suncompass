@@ -6,19 +6,19 @@ import {timeZoneLookupTable, moonEventString} from "../src/core/lookup-tables.ts
 
 const args = process.argv;
 let lat: number, long: number, zone: string, date: DateTime | undefined;
-if (args.length == 2) {
+if (args.length === 2) {
     [lat, long] = [34.42,-119.85]; // the location around the University of California, Santa Barbara
     zone = find(lat, long)[0];
     date = DateTime.now().setZone(zone);   
 }
-else if (args.length == 4) { 
+else if (args.length === 4) { 
     /* Accepts coordinates. Example: "npx ts-node scripts/rise-set.ts 40.75 -73.99" gives moonrise and moonset times for 
     Manhattan, New York City in Eastern Time. */
     [lat, long] = [Number(args[2]), Number(args[3])];
     zone = find(lat, long)[0];
     date = DateTime.now().setZone(zone);
 }
-else if (args.length == 5) {
+else if (args.length === 5) {
     /* Coordinates and date. Example: "npx ts-node scripts/rise-set.ts 40.75 -73.99 2025-06-20" gives times for June 20, 2025
     in Manhattan in EDT.
     The specific time can also be specified in the date. Example:

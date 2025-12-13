@@ -152,7 +152,7 @@ function generateGrid(options: sunSvgOptions | moonSvgOptions, gridlineColor: st
     const font = options.font!;
     const gridlineWidth = options.gridlineWidth!;
     const days = ("events" in options) ? options.events.length : options.sunEvents.length;
-    const isLeapYear = (days == 366);
+    const isLeapYear = (days === 366);
     const scaleX = diagramWidth / days;
     const language = options.language!;
 
@@ -214,11 +214,11 @@ export function generateSunSvg(options: sunSvgOptions): string {
         const p: mf.Polygon[] = [[]]; // p is short for polygons
         for (let i=0; i<days; i++) {
             if (durations[i] > 0) {
-                if (i == 0 || durations[i-1] == 0) {p[0].push([i, 0], [i, durations[i]], [i+1, durations[i]]);}
+                if (i === 0 || durations[i-1] === 0) {p[0].push([i, 0], [i, durations[i]], [i+1, durations[i]]);}
                 else {p[p.length-1].push([i, durations[i]], [i+1, durations[i]]);}
-                if (i == days-1) {p[p.length-1].push([days, 0]);}
+                if (i === days-1) {p[p.length-1].push([days, 0]);}
             }
-            else if (i != 0 && durations[i-1] > 0) {p[p.length-1].push([i, 0]);}
+            else if (i !== 0 && durations[i-1] > 0) {p[p.length-1].push([i, 0]);}
         }
         return p;
     }
@@ -229,7 +229,7 @@ export function generateSunSvg(options: sunSvgOptions): string {
         for (const evts of events) {
             const curDay: number[] = [];
             for (const event of evts) {
-                if (event.type == "Solar Noon") {curDay.push(mf.intDiv(getTimeOfDay(event.unix, timeZone),1000));}
+                if (event.type === "Solar Noon") {curDay.push(mf.intDiv(getTimeOfDay(event.unix, timeZone),1000));}
             }
             solarNoons.push(curDay);
         }
@@ -240,7 +240,7 @@ export function generateSunSvg(options: sunSvgOptions): string {
             for (const noon of solarNoons[i]) { // for each solar noon of the day (may be more than 1)
                 let flag: boolean = false;
                 for (const group of groups) {
-                    if (Math.abs(noon - group[group.length-1][1]) < 1800 && group[group.length-1][0] == i-0.5) {
+                    if (Math.abs(noon - group[group.length-1][1]) < 1800 && group[group.length-1][0] === i-0.5) {
                         flag = true;
                         group.push([i+0.5, noon]);
                         break;
@@ -260,7 +260,7 @@ export function generateSunSvg(options: sunSvgOptions): string {
         for (const evts of events) {
             const curDay: number[] = [];
             for (const event of evts) {
-                if (event.type == "Solar Midnight") {curDay.push(mf.intDiv(getTimeOfDay(event.unix, timeZone),1000));}
+                if (event.type === "Solar Midnight") {curDay.push(mf.intDiv(getTimeOfDay(event.unix, timeZone),1000));}
             }
             solarMidnights.push(curDay);
         }
@@ -271,7 +271,7 @@ export function generateSunSvg(options: sunSvgOptions): string {
             for (const midnight of solarMidnights[i]) { // for each solar midnight of the day (may be more than 1)
                 let flag: boolean = false;
                 for (const group of groups) {
-                    if (Math.abs(midnight - group[group.length-1][1]) < 1800 && group[group.length-1][0] == i-0.5) {
+                    if (Math.abs(midnight - group[group.length-1][1]) < 1800 && group[group.length-1][0] === i-0.5) {
                         flag = true;
                         group.push([i+0.5, midnight]);
                         break;
@@ -306,7 +306,7 @@ export function generateSunSvg(options: sunSvgOptions): string {
     svgString += `<g transform="translate(${leftPadding}, ${topPadding+diagramHeight})` + 
     ` scale(${scaleX.toPrecision(8)}, ${scaleY.toPrecision(8)})">\n`;
 
-    if (type == "length") { // day/twilight/night length plot
+    if (type === "length") { // day/twilight/night length plot
         const dLengths: number[] = []; // day lengths
         const cLengths: number[] = []; // day + civil twilight lengths
         const nLengths: number[] = []; // day + civil + nautical twilight lengths
@@ -330,7 +330,7 @@ export function generateSunSvg(options: sunSvgOptions): string {
         for (const polygon of cp) {svgString += pathFromArray(polygon, sunColors[1]);} // civil twilight
         for (const polygon of dp) {svgString += pathFromArray(polygon, sunColors[0]);} // daylight
     }
-    else if (type == "rise-set") { // sunrise, sunset, dusk, dawn plot
+    else if (type === "rise-set") { // sunrise, sunset, dusk, dawn plot
         const aIntervals: number[][][] = []; // intervals of astronomical twilight or brighter
         const nIntervals: number[][][] = []; // intervals of nautical twilight or brighter
         const cIntervals: number[][][] = []; // intervals of civil twilight or brighter

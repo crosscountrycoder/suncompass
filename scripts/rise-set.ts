@@ -15,19 +15,19 @@ function solsticesEquinoxes(): RawSeasonRecord[] {
 
 const args = process.argv;
 let lat: number, long: number, zone: string, date: DateTime | undefined;
-if (args.length == 2) {
+if (args.length === 2) {
     [lat, long] = [34.42,-119.85]; // the location around the University of California, Santa Barbara
     zone = find(lat, long)[0];
     date = DateTime.now().setZone(zone);   
 }
-else if (args.length == 4) { 
+else if (args.length === 4) { 
     /* Accepts coordinates. Example: "npx ts-node scripts/rise-set.ts 40.75 -73.99" gives rise-set times for Manhattan, 
     New York City in Eastern Time. */
     [lat, long] = [Number(args[2]), Number(args[3])];
     zone = find(lat, long)[0];
     date = DateTime.now().setZone(zone);
 }
-else if (args.length == 5) {
+else if (args.length === 5) {
     /* Coordinates and date. Example: "npx ts-node scripts/rise-set.ts 40.75 -73.99 2025-06-20" gives times for June 20, 2025 
     in Manhattan in EDT.
     The date argument can be replaced with "me" for March equinox, "js" for June solstice, "se" for Sep equinox or "ds" 
@@ -40,10 +40,10 @@ else if (args.length == 5) {
     zone = find(lat, long)[0];
     const curYear = DateTime.now().setZone(zone).year;
     const solstices = solsticesEquinoxes();
-    if (args[4] == "me") {date = DateTime.fromISO(solstices[curYear].marEquinox, {zone: zone});}
-    else if (args[4] == "js") {date = DateTime.fromISO(solstices[curYear].junSolstice, {zone: zone});}
-    else if (args[4] == "se") {date = DateTime.fromISO(solstices[curYear].sepEquinox, {zone: zone});}
-    else if (args[4] == "ds") {date = DateTime.fromISO(solstices[curYear].decSolstice, {zone: zone});}
+    if (args[4] === "me") {date = DateTime.fromISO(solstices[curYear].marEquinox, {zone: zone});}
+    else if (args[4] === "js") {date = DateTime.fromISO(solstices[curYear].junSolstice, {zone: zone});}
+    else if (args[4] === "se") {date = DateTime.fromISO(solstices[curYear].sepEquinox, {zone: zone});}
+    else if (args[4] === "ds") {date = DateTime.fromISO(solstices[curYear].decSolstice, {zone: zone});}
     else {date = DateTime.fromISO(args[4], {zone: zone});}
 }
 else {
@@ -77,7 +77,7 @@ else {
     const solarEventsT = sc.sunEventsDay(lat, long, date.plus({days: 1}));
     const curDayStart = mf.ms(date.startOf("day"));
     const dayLength = sc.dayLength(curDayStart, solarEventsY, solarEvents, solarEventsT);
-    if (dayLength == -1) {console.log("Day length: undefined");}
+    if (dayLength === -1) {console.log("Day length: undefined");}
     else {console.log(`Day length: ${Duration.fromMillis(1000*Math.round(dayLength/1000)).toFormat("h:mm:ss")}`);}
     console.log();
 

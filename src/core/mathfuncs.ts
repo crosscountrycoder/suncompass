@@ -97,9 +97,7 @@ export function approxDeltaT(t: number) {
 /** Clamps a number to the range [min, max]. 
  * If min and max are not specified, they default to -1 and 1 respectively.*/
 export function clamp(x: number, min=-1, max=1) {
-    if (x <= min) {return min;}
-    else if (x >= max) {return max;}
-    else {return x;}
+    return Math.max(min, Math.min(x, max));
 }
 
 /** Calculates x modulo y, where the output is in the range [0, y). */
@@ -146,21 +144,6 @@ export function direction(bearing: number) {
     else {return "N";}
 }
 
-export function displayTime(date: any, twelveHourFormat = false) {
-    if (date == Number.POSITIVE_INFINITY) {return "∞";}
-    else if (date == Number.NEGATIVE_INFINITY) {return "-∞";}
-    else if (isNaN(date)) {return NaN;}
-    else if (twelveHourFormat) {return date.toFormat("h:mm:ss a");}
-    else {return date.toFormat("HH:mm:ss");}
-}
-
-export function displayDuration(duration: any) {
-    if (duration == Number.POSITIVE_INFINITY) {return "∞";}
-    else if (duration == Number.NEGATIVE_INFINITY) {return "-∞";}
-    else if (isNaN(duration)) {return NaN;}
-    else {return duration.toFormat("h:mm:ss");}
-}
-
 /** Returns the time of day in the DateTime as a number of milliseconds, from 0 (00:00:00.000) to 86399999 (23:59:59.999). */
 export function convertToMS(date: DateTime) {
     return 1000 * (date.hour * 3600 + date.minute * 60 + date.second) + date.millisecond;
@@ -197,7 +180,7 @@ export function isCollinear(p0: number[], p1: number[], p2: number[], epsilon = 
 
 /** Like toFixed() function in JavaScript/TypeScript, but removes trailing zeroes. */
 export function toFixedS(n: number, precision: number) {
-    if (precision == 0) {return n.toFixed(0);}
+    if (precision === 0) {return n.toFixed(0);}
     else {return n.toFixed(precision).replace(/\.?0+$/, "");}
 }
 
@@ -265,7 +248,7 @@ export function elevAzimuth(lat: number, long: number, ecefO: number[], ecefC: n
 /** Given a start date and an end date, both with the same IANA time zone identifier, return an array of Luxon DateTimes with
  * the start of each day within the interval. */
 export function dayStarts(start: DateTime, end: DateTime): DateTime[] {
-    if (start.zoneName != end.zoneName) {
+    if (start.zoneName !== end.zoneName) {
         console.log("Start and end must have same time zone");
         return [];
     }
@@ -319,7 +302,7 @@ export function intervalsToPolygon(intervals: number[][][]): Polygon[] {
         let inside = 0;
         let y0 = 0;
         for (const { y, d } of evts) {
-            if (inside == 1) out.push([y0, y]);
+            if (inside === 1) out.push([y0, y]);
             inside = (inside + d) & 1;
             y0 = y;
         }

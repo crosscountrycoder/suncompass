@@ -424,19 +424,19 @@ export function moonEventsDay(lat: number, long: number, date: DateTime): SEvent
 export function moonIntervals(lat: number, long: number, dayStart: number, events: SEvent[], timeZone: TimeChange[]): number[][] {
     const newMoonEvents: SEvent[] = [];
     for (const event of events) {
-        if (event.type == "Moonrise" || event.type == "Moonset") {newMoonEvents.push(event);}
+        if (event.type === "Moonrise" || event.type === "Moonset") {newMoonEvents.push(event);}
     }
-    if (newMoonEvents.length == 0) { // if no moonrise or moonset
+    if (newMoonEvents.length === 0) { // if no moonrise or moonset
         if (moonPosition(lat, long, dayStart)[0] >= -5/6) {return [[0, 86400]];} // up all day
         else {return [];} // down all day
     }
-    else if (newMoonEvents[0].type == "Moonrise") {
-        if (newMoonEvents.length == 1) {
+    else if (newMoonEvents[0].type === "Moonrise") {
+        if (newMoonEvents.length === 1) {
             return [[mf.intDiv(getTimeOfDay(newMoonEvents[0].unix, timeZone),1000), 86400]];
-        } else if (newMoonEvents.length == 2) {
+        } else if (newMoonEvents.length === 2) {
             return [[mf.intDiv(getTimeOfDay(newMoonEvents[0].unix, timeZone),1000), 
             mf.intDiv(getTimeOfDay(newMoonEvents[1].unix, timeZone),1000)]];
-        } else if (newMoonEvents.length == 3) {
+        } else if (newMoonEvents.length === 3) {
             return [[mf.intDiv(getTimeOfDay(newMoonEvents[0].unix, timeZone),1000), mf.intDiv(getTimeOfDay(newMoonEvents[1].unix, timeZone),1000)],
                 [mf.intDiv(getTimeOfDay(newMoonEvents[2].unix, timeZone),1000), 86400]];
         } else {
@@ -444,13 +444,13 @@ export function moonIntervals(lat: number, long: number, dayStart: number, event
                 [mf.intDiv(getTimeOfDay(newMoonEvents[2].unix, timeZone),1000), mf.intDiv(getTimeOfDay(newMoonEvents[3].unix, timeZone),1000)]];
         }
     }
-    else { // if (newMoonEvents[0].type == "Moonset")
-        if (newMoonEvents.length == 1) {
+    else { // if (newMoonEvents[0].type === "Moonset")
+        if (newMoonEvents.length === 1) {
             return [[0, mf.intDiv(getTimeOfDay(newMoonEvents[0].unix, timeZone),1000)]];
-        } else if (newMoonEvents.length == 2) {
+        } else if (newMoonEvents.length === 2) {
             return [[0, mf.intDiv(getTimeOfDay(newMoonEvents[0].unix, timeZone),1000)], 
                 [mf.intDiv(getTimeOfDay(newMoonEvents[1].unix, timeZone),1000), 86400]];
-        } else if (newMoonEvents.length == 3) {
+        } else if (newMoonEvents.length === 3) {
             return [[0, mf.intDiv(getTimeOfDay(newMoonEvents[0].unix, timeZone),1000)], 
                 [mf.intDiv(getTimeOfDay(newMoonEvents[1].unix, timeZone),1000), mf.intDiv(getTimeOfDay(newMoonEvents[2].unix, timeZone),1000)]];
         } else {

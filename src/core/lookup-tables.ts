@@ -31,19 +31,19 @@ export type SEvent = {unix: number, type: string, elev: number, azimuth: number}
 
 /** Given the value returned by dayStarts, create a "lookup table" showing when the time offsets change during the given period. */
 export function timeZoneLookupTable(dayStarts: DateTime[]): TimeChange[] {
-    const changeAtStart = (dayStarts[0].offset != dayStarts[0].minus(1).offset);
+    const changeAtStart = (dayStarts[0].offset !== dayStarts[0].minus(1).offset);
     const firstChange: TimeChange = {unix: mf.ms(dayStarts[0]), offset: dayStarts[0].offset, change: changeAtStart};
     const table: TimeChange[] = [firstChange];
 
     for (let i=1; i<dayStarts.length; i++) {
         const prevDay = dayStarts[i-1], curDay = dayStarts[i];
-        if (prevDay.offset != curDay.offset) {
+        if (prevDay.offset !== curDay.offset) {
             // If the time changes during this day, use binary search to find where it changes.
             let t0 = mf.ms(prevDay), t1 = mf.ms(curDay);
             while (t1 - t0 > 1) {
                 const avg = Math.floor((t0 + t1)/2);
                 const avgTime = DateTime.fromMillis(avg, {zone: curDay.zone});
-                if (avgTime.offset == prevDay.offset) {t0 = avg;}
+                if (avgTime.offset === prevDay.offset) {t0 = avg;}
                 else {t1 = avg;}
             }
             table.push({unix: t1, offset: curDay.offset, change: true});
@@ -115,9 +115,9 @@ export function sunEventString(event: SEvent, zoneTable: TimeChange[], twentyFou
     const azStr = (event.azimuth.toFixed(4) + "° " + mf.direction(event.azimuth).padStart(3));
     const eventStr = `${eventType} | ${timeString.padStart(11)} | ${elevStr.padStart(9)} | ${azStr.padStart(13)}`;
 
-    const bold = event.type == "Sunrise" || event.type == "Sunset" || event.type == "Solar Noon";
+    const bold = event.type === "Sunrise" || event.type === "Sunset" || event.type === "Solar Noon";
     let [r, g, b] = [128, 128, 128];
-    if (event.type == "Sunrise" || event.type == "Sunset") {[r, g, b] = [255, 255, 0];}
+    if (event.type === "Sunrise" || event.type === "Sunset") {[r, g, b] = [255, 255, 0];}
     else if (event.elev >= -5/6) {[r, g, b] = [255, 255, 255];}
     const colorStr = `\x1b[38;2;${r};${g};${b}m`;
     const boldStr = "\x1b[1m";
@@ -143,9 +143,9 @@ export function moonEventString(event: SEvent, zoneTable: TimeChange[], twentyFo
     const illumStr = (100*illum).toFixed(2) + "%";
     const eventStr = `${eventType} | ${timeString.padStart(11)} | ${elevStr.padStart(9)} | ${azStr.padStart(13)} | ${illumStr.padStart(12)}`;
 
-    const bold = event.type == "Moonrise" || event.type == "Moonset" || event.type == "Meridian Passing";
+    const bold = event.type === "Moonrise" || event.type === "Moonset" || event.type === "Meridian Passing";
     let [r, g, b] = [128, 128, 128];
-    if (event.type == "Moonrise" || event.type == "Moonset") {[r, g, b] = [255, 255, 0];}
+    if (event.type === "Moonrise" || event.type === "Moonset") {[r, g, b] = [255, 255, 0];}
     else if (event.elev >= -5/6) {[r, g, b] = [255, 255, 255];}
     const colorStr = `\x1b[38;2;${r};${g};${b}m`;
     const boldStr = "\x1b[1m";

@@ -23,7 +23,7 @@ function solsticesEquinoxes(): RawSeasonRecord[] {
 }
 
 const args = process.argv;
-if (args.length == 2) {year = DateTime.now().year;}
+if (args.length === 2) {year = DateTime.now().year;}
 else {year = Number(args[2]);}
 if (args.length <= 3) {zone = "local";}
 else {zone = args[3];}

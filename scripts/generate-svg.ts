@@ -38,11 +38,11 @@ const timeZone = find(lat, long)[0];
 const year = (args.length >= 5) ? Number(args[4]) : DateTime.now().setZone(timeZone).year;
 
 const daylengthFileName = 
-(args.length == 6) ? `./diagrams/${args[5]}-day-lengths-${year}.svg` : `./diagrams/day-lengths.svg`;
+(args.length === 6) ? `./diagrams/${args[5]}-day-lengths-${year}.svg` : `./diagrams/day-lengths.svg`;
 const risesetFileName = 
-(args.length == 6) ? `./diagrams/${args[5]}-sunrise-sunset-${year}.svg` : `./diagrams/sunrise-sunset.svg`;
+(args.length === 6) ? `./diagrams/${args[5]}-sunrise-sunset-${year}.svg` : `./diagrams/sunrise-sunset.svg`;
 const moonFileName =
-(args.length == 6) ? `./diagrams/${args[5]}-moon-${year}.svg` : `./diagrams/moon.svg`;
+(args.length === 6) ? `./diagrams/${args[5]}-moon-${year}.svg` : `./diagrams/moon.svg`;
 
 const sunEvents = [];
 const startDate = DateTime.fromObject({year: year}, {zone: timeZone});
@@ -85,8 +85,8 @@ for (let i=0; i<dateList.length-1; i++) {
     const curDayMoonEvents = allMoonEvents(lat, long, startUnix, endUnix);
     const curDayIntervals = moonIntervals(lat, long, startUnix, curDayMoonEvents, tzLookupTable);
     for (const event of curDayMoonEvents) {
-        if (event.type == "New Moon") {newMoons.push(DateTime.fromMillis(event.unix, {zone: timeZone}));}
-        else if (event.type == "Full Moon") {fullMoons.push(DateTime.fromMillis(event.unix, {zone: timeZone}));}
+        if (event.type === "New Moon") {newMoons.push(DateTime.fromMillis(event.unix, {zone: timeZone}));}
+        else if (event.type === "Full Moon") {fullMoons.push(DateTime.fromMillis(event.unix, {zone: timeZone}));}
     }
     moonEvents.push(curDayMoonEvents);
     moonInts.push(curDayIntervals);
