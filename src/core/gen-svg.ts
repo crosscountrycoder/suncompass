@@ -420,20 +420,10 @@ export function generateMoonSvg(options: moonSvgOptions) {
     const scaleY = -diagramHeight / 86400;
     svgString += `<g transform="translate(${leftPadding}, ${topPadding+diagramHeight})` + 
     ` scale(${scaleX.toPrecision(8)}, ${scaleY.toPrecision(8)})">\n`;
-
-    const nIntervals: number[][][] = [];
-    const cIntervals: number[][][] = [];
-    for (let i=0; i<sunEvents.length; i++) {
-        const [nIntervalsI, cIntervalsI] = intervalsNightCivilTwilight(sunEvents[i], timeZone);
-        nIntervals.push(nIntervalsI);
-        cIntervals.push(cIntervalsI);
-    }
-    const nPolygons = toPolygons(nIntervals, "rgba(0, 0, 0, 0.5)");
-    const cPolygons = toPolygons(cIntervals, "rgba(0, 0, 0, 0.25)");
     
+    // add light blue polygons (when moon above horizon)
     const moonPolygons = toPolygons(moonIntervals, "#80c0ff");
-    const allPolygons = [...moonPolygons, ...nPolygons, ...cPolygons];
-    for (const polygon of allPolygons) {svgString += polygon;}
+    for (const polygon of moonPolygons) {svgString += polygon;}
 
     // draw lines for new and full moons
     for (const date of newMoons) {
@@ -455,9 +445,22 @@ export function generateMoonSvg(options: moonSvgOptions) {
             lines.push([[x+0.5, interval[0]], [x+0.5, interval[1]]]);
         }
         for (const line of lines) {
-            svgString += lineSvg(line[0], line[1], "#000080", 1, 2, true);
+            svgString += lineSvg(line[0], line[1], "#0000ff", 1, 2, true);
         }
     }
+
+    // add night and civil twilight overlays
+    const nIntervals: number[][][] = [];
+    const cIntervals: number[][][] = [];
+    for (let i=0; i<sunEvents.length; i++) {
+        const [nIntervalsI, cIntervalsI] = intervalsNightCivilTwilight(sunEvents[i], timeZone);
+        nIntervals.push(nIntervalsI);
+        cIntervals.push(cIntervalsI);
+    }
+    const nPolygons = toPolygons(nIntervals, "rgba(0, 0, 0, 0.5)");
+    const cPolygons = toPolygons(cIntervals, "rgba(0, 0, 0, 0.25)");
+    for (const polygon of nPolygons) {svgString += polygon;}
+    for (const polygon of cPolygons) {svgString += polygon;}
 
     svgString += ("</g>\n" + generateGrid(nOptions, "#000000") + svgClose);
     return svgString;
