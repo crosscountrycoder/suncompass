@@ -339,7 +339,7 @@ export function maxAndMin(lat: number, long: number, start: LODProfile, end: LOD
                 if (dAvg >= 0) {t0 = tAvg; d0 = dAvg;}
                 else {t1 = tAvg; d1 = dAvg;}
             }
-            // use 1-minute window, then linear interpolation to make calculation faster
+            // use 5-minute window, then linear interpolation to make calculation faster
             const t = t0 + (d0 / (d0 - d1)) * (t1 - t0);
             times.push(t);
         }
