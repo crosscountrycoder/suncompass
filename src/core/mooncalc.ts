@@ -223,7 +223,7 @@ export function moonMaxMin(lat: number, long: number, start: number, end: number
         let d0 = moonDerivative(lat, long, t0), d1 = moonDerivative(lat, long, t1);
         if (d0 >= 0 && d1 < 0) { // maximum (i.e. solar noon, or summer solstice at pole)
             while (t1 - t0 > BSEARCH_GAP) {
-                const tAvg = Math.floor((t0+t1)/2);
+                const tAvg = (t0+t1)/2;
                 const dAvg = moonDerivative(lat, long, tAvg);
                 if (dAvg >= 0) {t0 = tAvg; d0 = dAvg;}
                 else {t1 = tAvg; d1 = dAvg;}
@@ -233,7 +233,7 @@ export function moonMaxMin(lat: number, long: number, start: number, end: number
         }
         else if (d0 <= 0 && d1 > 0) { // minimum (i.e. solar midnight, or winter solstice at pole)
             while (t1 - t0 > BSEARCH_GAP) {
-                const tAvg = Math.floor((t0+t1)/2);
+                const tAvg = (t0+t1)/2;
                 const dAvg = moonDerivative(lat, long, tAvg);
                 if (dAvg <= 0) {t0 = tAvg; d0 = dAvg;}
                 else {t1 = tAvg; d1 = dAvg;}
@@ -262,7 +262,7 @@ export function moonrise(lat: number, long: number, maxMin: number[], angle: num
         let e1 = moonPosition(lat, long, t1)[0];
         if (e0 <= angle && e1 >= angle) {
             while (t1 - t0 > BSEARCH_GAP) {
-                const tAvg = Math.floor((t0+t1)/2);
+                const tAvg = (t0+t1)/2;
                 const eAvg = moonPosition(lat, long, tAvg)[0];
                 if (eAvg <= angle) {t0 = tAvg; e0 = eAvg;}
                 else {t1 = tAvg; e1 = eAvg;}
@@ -292,7 +292,7 @@ export function moonset(lat: number, long: number, maxMin: number[], angle: numb
         let e1 = moonPosition(lat, long, t1)[0];
         if (e0 >= angle && e1 <= angle) {
             while (t1 - t0 > BSEARCH_GAP) {
-                const tAvg = Math.floor((t0+t1)/2);
+                const tAvg = (t0+t1)/2;
                 const eAvg = moonPosition(lat, long, tAvg)[0];
                 if (eAvg >= angle) {t0 = tAvg; e0 = eAvg;}
                 else {t1 = tAvg; e1 = eAvg;}
@@ -355,49 +355,49 @@ export function moonPhase(lat: number, long: number, start: number, end: number)
     let t0 = start, t1 = end;
     if (p1 < p0) { // new moon
         while (t1 - t0 > BSEARCH_GAP) {
-            const tAvg = Math.floor((t0+t1)/2);
+            const tAvg = (t0+t1)/2;
             const pAvg = moonSunLongDiff(tAvg);
             if (pAvg > 180) {t0 = tAvg; p0 = pAvg;}
             else {t1 = tAvg; p1 = pAvg;}
         }
         const frac = (360 - p0) / (p1 - p0 + 360);
-        const t = t0 + frac * (t1 - t0);
+        const t = Math.floor(t0 + frac * (t1 - t0));
         const [e, a] = moonPosition(lat, long, t);
         return {unix: t, type: "New Moon", elev: e, azimuth: a};
     }
     else if (p0 <= 90 && p1 >= 90) { // first quarter
         while (t1 - t0 > BSEARCH_GAP) {
-            const tAvg = Math.floor((t0+t1)/2);
+            const tAvg = (t0+t1)/2;
             const pAvg = moonSunLongDiff(tAvg);
             if (pAvg <= 90) {t0 = tAvg; p0 = pAvg;}
             else {t1 = tAvg; p1 = pAvg;}
         }
         const frac = (90 - p0) / (p1 - p0);
-        const t = t0 + frac * (t1 - t0);
+        const t = Math.floor(t0 + frac * (t1 - t0));
         const [e, a] = moonPosition(lat, long, t);
         return {unix: t, type: "First Quarter", elev: e, azimuth: a};
     }
     else if (p0 <= 180 && p1 >= 180) { // full moon
         while (t1 - t0 > BSEARCH_GAP) {
-            const tAvg = Math.floor((t0+t1)/2);
+            const tAvg = (t0+t1)/2;
             const pAvg = moonSunLongDiff(tAvg);
             if (pAvg <= 180) {t0 = tAvg; p0 = pAvg;}
             else {t1 = tAvg; p1 = pAvg;}
         }
         const frac = (180 - p0) / (p1 - p0);
-        const t = t0 + frac * (t1 - t0);
+        const t = Math.floor(t0 + frac * (t1 - t0));
         const [e, a] = moonPosition(lat, long, t);
         return {unix: t, type: "Full Moon", elev: e, azimuth: a};
     }
     else if (p0 <= 270 && p1 >= 270) { // last quarter
         while (t1 - t0 > BSEARCH_GAP) {
-            const tAvg = Math.floor((t0+t1)/2);
+            const tAvg = (t0+t1)/2;
             const pAvg = moonSunLongDiff(tAvg);
             if (pAvg <= 270) {t0 = tAvg; p0 = pAvg;}
             else {t1 = tAvg; p1 = pAvg;}
         }
         const frac = (270 - p0) / (p1 - p0);
-        const t = t0 + frac * (t1 - t0);
+        const t = Math.floor(t0 + frac * (t1 - t0));
         const [e, a] = moonPosition(lat, long, t);
         return {unix: t, type: "Last Quarter", elev: e, azimuth: a};
     }

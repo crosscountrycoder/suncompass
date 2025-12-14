@@ -334,7 +334,7 @@ export function maxAndMin(lat: number, long: number, start: LODProfile, end: LOD
         let d0 = derivative(lat, long, t0, start, end), d1 = derivative(lat, long, t1, start, end);
         if (d0 >= 0 && d1 < 0) { // maximum (i.e. solar noon, or summer solstice at pole)
             while (t1 - t0 > BSEARCH_GAP) {
-                const tAvg = Math.floor((t0+t1)/2);
+                const tAvg = (t0+t1)/2;
                 const dAvg = derivative(lat, long, tAvg, start, end);
                 if (dAvg >= 0) {t0 = tAvg; d0 = dAvg;}
                 else {t1 = tAvg; d1 = dAvg;}
@@ -345,7 +345,7 @@ export function maxAndMin(lat: number, long: number, start: LODProfile, end: LOD
         }
         else if (d0 <= 0 && d1 > 0) { // minimum (i.e. solar midnight, or winter solstice at pole)
             while (t1 - t0 > BSEARCH_GAP) {
-                const tAvg = Math.floor((t0+t1)/2);
+                const tAvg = (t0+t1)/2;
                 const dAvg = derivative(lat, long, tAvg, start, end);
                 if (dAvg <= 0) {t0 = tAvg; d0 = dAvg;}
                 else {t1 = tAvg; d1 = dAvg;}
@@ -381,7 +381,7 @@ export function dawn(lat: number, long: number, angle: number, type: string, max
         let e1 = sunPosition(lat, long, lod1)[0];
         if (e0 <= angle && e1 >= angle) {
             while (t1 - t0 > BSEARCH_GAP) {
-                const avgLOD = estimateLOD(Math.floor((t0+t1)/2), startLOD, endLOD);
+                const avgLOD = estimateLOD((t0+t1)/2, startLOD, endLOD);
                 const eAvg = sunPosition(lat, long, avgLOD)[0];
                 if (eAvg <= angle) {t0 = avgLOD.unix; e0 = eAvg;}
                 else {t1 = avgLOD.unix; e1 = eAvg;}
@@ -417,7 +417,7 @@ export function dusk(lat: number, long: number, angle: number, type: string, max
         let e1 = sunPosition(lat, long, lod1)[0];
         if (e0 >= angle && e1 <= angle) {
             while (t1 - t0 > BSEARCH_GAP) {
-                const avgLOD = estimateLOD(Math.floor((t0+t1)/2), startLOD, endLOD);
+                const avgLOD = estimateLOD((t0+t1)/2, startLOD, endLOD);
                 const eAvg = sunPosition(lat, long, avgLOD)[0];
                 if (eAvg >= angle) {t0 = avgLOD.unix; e0 = eAvg;}
                 else {t1 = avgLOD.unix; e1 = eAvg;}
