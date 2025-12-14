@@ -18,7 +18,7 @@ the time zone of a geographic coordinate.
 */
 
 import * as mf from "./mathfuncs.ts";
-import {degToRad, sunPeriodicTerms, DAY_LENGTH} from "./constants.ts";
+import {degToRad, sunPeriodicTerms, DAY_LENGTH, BSEARCH_GAP} from "./constants.ts";
 import {generateLODProfile, estimateLOD, getTimeOfDay} from "./lookup-tables.ts";
 import type {TimeChange, LODProfile, SEvent} from "./lookup-tables.ts";
 import {DateTime} from "luxon";
@@ -331,24 +331,27 @@ export function maxAndMin(lat: number, long: number, start: LODProfile, end: LOD
     for (let i=0; i<intervals.length-1; i++) {
         // use binary search to find the time closest to zero derivative
         let t0 = intervals[i], t1 = intervals[i+1];
-        const d0 = derivative(lat, long, t0, start, end), d1 = derivative(lat, long, t1, start, end);
+        let d0 = derivative(lat, long, t0, start, end), d1 = derivative(lat, long, t1, start, end);
         if (d0 >= 0 && d1 < 0) { // maximum (i.e. solar noon, or summer solstice at pole)
-            while (t1 - t0 > 1) {
+            while (t1 - t0 > BSEARCH_GAP) {
                 const tAvg = Math.floor((t0+t1)/2);
                 const dAvg = derivative(lat, long, tAvg, start, end);
-                if (dAvg >= 0) {t0 = tAvg;}
-                else {t1 = tAvg;}
+                if (dAvg >= 0) {t0 = tAvg; d0 = dAvg;}
+                else {t1 = tAvg; d1 = dAvg;}
             }
-            times.push(t0);
+            // use 1-minute window, then linear interpolation to make calculation faster
+            const t = t0 + (d0 / (d0 - d1)) * (t1 - t0);
+            times.push(t);
         }
         else if (d0 <= 0 && d1 > 0) { // minimum (i.e. solar midnight, or winter solstice at pole)
-            while (t1 - t0 > 1) {
+            while (t1 - t0 > BSEARCH_GAP) {
                 const tAvg = Math.floor((t0+t1)/2);
                 const dAvg = derivative(lat, long, tAvg, start, end);
-                if (dAvg <= 0) {t0 = tAvg;}
-                else {t1 = tAvg;}
+                if (dAvg <= 0) {t0 = tAvg; d0 = dAvg;}
+                else {t1 = tAvg; d1 = dAvg;}
             }
-            times.push(t0);
+            const t = t0 + (d0 / (d0 - d1)) * (t1 - t0);
+            times.push(t);
         }
     }
     times.push(endTime);
@@ -374,16 +377,20 @@ export function dawn(lat: number, long: number, angle: number, type: string, max
     for (let i=0; i<maxMin.length-1; i++) {
         let t0 = maxMin[i], t1 = maxMin[i+1];
         const lod0 = estimateLOD(t0, startLOD, endLOD), lod1 = estimateLOD(t1, startLOD, endLOD);
-        let [e0, a0] = sunPosition(lat, long, lod0);
-        let [e1, a1] = sunPosition(lat, long, lod1);
+        let e0 = sunPosition(lat, long, lod0)[0];
+        let e1 = sunPosition(lat, long, lod1)[0];
         if (e0 <= angle && e1 >= angle) {
-            while (t1 - t0 > 1) {
+            while (t1 - t0 > BSEARCH_GAP) {
                 const avgLOD = estimateLOD(Math.floor((t0+t1)/2), startLOD, endLOD);
-                const [eAvg, aAvg] = sunPosition(lat, long, avgLOD);
-                if (eAvg <= angle) {t0 = avgLOD.unix; e0 = eAvg; a0 = aAvg;}
-                else {t1 = avgLOD.unix; e1 = eAvg; a1 = aAvg;}
+                const eAvg = sunPosition(lat, long, avgLOD)[0];
+                if (eAvg <= angle) {t0 = avgLOD.unix; e0 = eAvg;}
+                else {t1 = avgLOD.unix; e1 = eAvg;}
             }
-            dawnTimes.push({unix: t0, type: type, elev: e0, azimuth: a0});
+            // after reducing to 1-minute interval, use quadratic interpolation
+            const d0 = derivative(lat, long, t0, startLOD, endLOD) / 1000;
+            const t = Math.floor(mf.quadraticZero(t0, t1, e0-angle, e1-angle, d0));
+            const [e, a] = sunPosition(lat, long, estimateLOD(t, startLOD, endLOD));
+            dawnTimes.push({unix: t, type: type, elev: e, azimuth: a});
         }
     }
     return dawnTimes;
@@ -406,16 +413,20 @@ export function dusk(lat: number, long: number, angle: number, type: string, max
     for (let i=0; i<maxMin.length-1; i++) {
         let t0 = maxMin[i], t1 = maxMin[i+1];
         const lod0 = estimateLOD(t0, startLOD, endLOD), lod1 = estimateLOD(t1, startLOD, endLOD);
-        let [e0, a0] = sunPosition(lat, long, lod0);
-        let [e1, a1] = sunPosition(lat, long, lod1);
+        let e0 = sunPosition(lat, long, lod0)[0];
+        let e1 = sunPosition(lat, long, lod1)[0];
         if (e0 >= angle && e1 <= angle) {
-            while (t1 - t0 > 1) {
+            while (t1 - t0 > BSEARCH_GAP) {
                 const avgLOD = estimateLOD(Math.floor((t0+t1)/2), startLOD, endLOD);
-                const [eAvg, aAvg] = sunPosition(lat, long, avgLOD);
-                if (eAvg >= angle) {t0 = avgLOD.unix; e0 = eAvg; a0 = aAvg;}
-                else {t1 = avgLOD.unix; e1 = eAvg; a1 = aAvg;}
+                const eAvg = sunPosition(lat, long, avgLOD)[0];
+                if (eAvg >= angle) {t0 = avgLOD.unix; e0 = eAvg;}
+                else {t1 = avgLOD.unix; e1 = eAvg;}
             }
-            duskTimes.push({unix: t0, type: type, elev: e0, azimuth: a0});
+            // after reducing to 1-minute interval, use quadratic interpolation
+            const d0 = derivative(lat, long, t0, startLOD, endLOD) / 1000;
+            const t = Math.floor(mf.quadraticZero(t0, t1, e0-angle, e1-angle, d0));
+            const [e, a] = sunPosition(lat, long, estimateLOD(t, startLOD, endLOD));
+            duskTimes.push({unix: t, type: type, elev: e, azimuth: a});
         }
     }
     return duskTimes;

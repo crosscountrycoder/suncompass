@@ -19,6 +19,9 @@ export const J2000UTC = 946728000000;
 /** Number of milliseconds in 24 hours. */
 export const DAY_LENGTH = 86400000;
 
+/** Gap to use for binary search - after this use linear or quadratic interpolation. */
+export const BSEARCH_GAP = 300000; // 5 minutes
+
 // The following periodic terms are adopted from the book "Planetary Programs and Tables from -4000 to +2800".
 export const sunPeriodicTerms = [
     [403406, 0, 4.721964, 1.621043],

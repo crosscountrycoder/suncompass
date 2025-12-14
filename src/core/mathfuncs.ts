@@ -149,6 +149,39 @@ export function convertToMS(date: DateTime) {
     return 1000 * (date.hour * 3600 + date.minute * 60 + date.second) + date.millisecond;
 }
 
+/**
+ * Calculates one of the roots of a quadratic function, given two points on the quadratic curve and the derivative at one point.
+ * @param x0 Initial x-coordinate
+ * @param x1 Final x-coordinate (x1 > x0)
+ * @param y0 Value of y at x=x0
+ * @param y1 Value of y at x=x1
+ * @param d0 Value of dy/dx at x=x0
+ * @returns The root of the quadratic function between x0 and x1. Note that y0 and y1 should have opposite signs, and there
+ * should be exactly one real root between x0 and x1.
+ */
+export function quadraticZero(x0: number, x1: number, y0: number, y1: number, d0: number) {
+    const dx = x1 - x0;
+    // y = a*u**2 + b*u + c where u = x-x0
+    const a = (y1 - y0 - d0 * dx) / (dx ** 2);
+    const b = d0;
+    const c = y0;
+    const d1 = 2*a*dx + b; // dy/dx at x=x1
+
+    if (y0 === y1) { // constant (y0 = y1 = 0)
+        return x0;
+    }
+    else if (Math.abs(Math.abs(d1 / d0) - 1) <= 1e-6) { // linear
+        const frac = y0 / (y0 - y1);
+        return clamp(x0 + frac * (x1 - x0), x0, x1);
+    }
+    else { // quadratic
+        const disc = Math.max(0, b**2 - 4*a*c);
+        const sign = (y1 > y0) ? 1 : -1;
+        const u = (sign * Math.sqrt(disc) - b) / (2 * a);
+        return clamp(x0 + u, x0, x1);
+    }
+}
+
 /** Returns a Luxon DateTime corresponding to the beginning of the given day. */
 export function startOfDay(date: DateTime) {
     return date.set({hour: 0, minute: 0, second: 0, millisecond: 0});
