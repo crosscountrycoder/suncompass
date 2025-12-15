@@ -225,7 +225,9 @@ export const moonPtl = [
  *  
  * https://eclipse.gsfc.nasa.gov/SEhelp/deltat2004.html#tab1 (before 1700)
  * 
- * https://maia.usno.navy.mil/ser7/deltat.data (1700 - 2026)
+ * https://maia.usno.navy.mil/ser7/deltat.data (1700 - 2025)
+ * 
+ * https://maia.usno.navy.mil/ser7/finals.all (projection for 2027)
  * 
  * https://eclipse.gsfc.nasa.gov/LEcat5/deltatpoly.html (projections for 2026 - 2600)
  * 
@@ -281,7 +283,7 @@ export const deltaT = [
     [2015, 67.6],
     [2020, 69.4],
     [2025, 69.1],
-    [2026, 69.1],
+    [2027, 69.1],
     [2050, 93],
     [2100, 203],
     [2150, 328],
@@ -291,4 +293,4 @@ export const deltaT = [
     [2400, 1056],
     [2500, 1460],
     [2600, 1927]
-]
+];
