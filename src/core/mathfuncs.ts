@@ -1,5 +1,5 @@
 import { DateTime } from 'luxon';
-import {DAY_LENGTH, earthERadius, flattening, J2000UTC, degToRad, deltaT} from "./constants.ts";
+import {DAY_LENGTH, earthERadius, flattening, J2000UTC, degToRad, deltaT, earthPRadius} from "./constants.ts";
 
 export type Point = [number, number];
 export type Polygon = Point[];
@@ -190,7 +190,7 @@ export function latLongEcef(lat: number, long: number): number[] {
 }
 
 /** Converts geocentric latitude, longitude, and distance (in kilometers) to rectangular ECEF coordinates.
- * @param lat Geocentric latitude. (To convert from geodetic, use geodetic2geocentric)
+ * @param lat Geocentric latitude.
  * @param long Longitude.
  * @param dist Distance from Earth's center in kilometers.
  * @returns ECEF coordinate array: [x, y, z]
@@ -228,6 +228,60 @@ export function elevAzimuth(lat: number, long: number, ecefO: number[], ecefC: n
     const elev = Math.asin(clamp(U / R)) / degToRad; // elevation above horizon
     const az = mod(Math.atan2(E, N) / degToRad, 360); // degrees clockwise from north
     return [elev, az];
+}
+
+/** Finds the subpoint of a celestial body - the [latitude, longitude] at which the body is directly overhead - given the
+ * body's ECEF coordinates.
+ */
+export function subpoint(ecef: number[]): number[] {
+    const a = earthERadius;
+    const b = earthPRadius;
+    const e2 = 1 - b**2 / a**2;
+    
+    function F(k: number): number {
+        const dx = 1 + k / a**2;
+        const dz = 1 + k / b**2;
+        const x = ecef[0] / dx, y = ecef[1] / dx, z = ecef[2] / dz;
+        return (x**2 + y**2) / a**2 + z**2 / b**2 - 1;
+    }
+
+    // Bracket root. k=0 => point at moon vector itself (outside ellipsoid) => F(0) > 0
+    // For large k, x,y,z shrink toward 0 => F(k) -> -1. So root exists.
+    let lo = 0;
+    let hi = b ** 2;
+    for (let i=0; i<200 && F(hi) > 0; i++) {hi *= 2;}
+
+    // Bisection
+    for (let i = 0; i < 80; i++) {
+        const mid = (lo + hi) / 2;
+        if (F(mid) > 0) {lo = mid;} 
+        else {hi = mid;}
+    }
+    
+    const k = (lo + hi) / 2;
+    const dx = 1 + k / a**2;
+    const dz = 1 + k / b**2;
+    const x = ecef[0] / dx, y = ecef[1] / dx, z = ecef[2] / dz;
+
+    const p = Math.hypot(x, y);
+    if (p === 0) { // poles - longitude arbitrary so we use 0
+        return [(z >= 0) ? 90 : -90, 0];
+    }
+
+    const lon = Math.atan2(y, x);
+    let lat = Math.atan2(z, p*(1-e2)); // initial guess
+    let h = 0;
+
+    for (let i=0; i<10; i++) {
+        const sinLat = Math.sin(lat);
+        const N = a / Math.sqrt(1 - e2 * sinLat ** 2);
+        h = p / Math.cos(lat) - N;
+        const latNext = Math.atan2(z, p * (1 - e2 * (N / (N + h))));
+        if (Math.abs(latNext - lat) < 1e-14) {lat = latNext; break;}
+        lat = latNext;
+    }
+
+    return [clamp(lat / degToRad, -90, 90), mod(lon / degToRad + 180, 360) - 180];
 }
 
 /** Given a start date and an end date, both with the same IANA time zone identifier, return an array of Luxon DateTimes with

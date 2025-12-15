@@ -134,11 +134,7 @@ export function moonEcef(unix: number): number[] {
 
 /** Returns the sublunar point [latitude, longitude], where the moon is directly overhead. */
 export function sublunarPoint(unix: number): number[] {
-    const [xecef, yecef, zecef] = moonEcef(unix);
-    const r = Math.hypot(xecef, yecef, zecef);
-    const [ux, uy, uz] = [xecef / r, yecef / r, zecef / r];
-    const [lat, lon] = [Math.asin(mf.clamp(uz)), Math.atan2(uy, ux)]; // radians
-    return [lat / degToRad, mf.mod(lon / degToRad + 180, 360) - 180];
+    return mf.subpoint(moonEcef(unix));
 }
 
 /** Returns the moon's position: [elevation, azimuth] in degrees. Optionally, the observer's ECEF can be specified in order
