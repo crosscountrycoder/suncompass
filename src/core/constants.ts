@@ -219,7 +219,7 @@ export const moonPtl = [
     [2,-2,0,1,107],
 ];
 
-/** Approximate values of delta T for selected years from -500 through 2600. Delta T is linearly interpolated between years.
+/** Approximate values of delta T for selected years from 0 through 2500. Delta T is linearly interpolated between years.
  * 
  * Sources:
  *  
@@ -229,15 +229,10 @@ export const moonPtl = [
  * 
  * https://maia.usno.navy.mil/ser7/finals.all (projection for 2027)
  * 
- * https://eclipse.gsfc.nasa.gov/LEcat5/deltatpoly.html (projections for 2026 - 2600)
+ * https://eclipse.gsfc.nasa.gov/LEcat5/deltatpoly.html (projections for 2050 - 2500)
  * 
  */
 export const deltaT = [
-    [-500, 17190],
-    [-400, 15530],
-    [-300, 14080],
-    [-200, 12790],
-    [-100, 11640],
     [0, 10580],
     [100, 9600],
     [200, 8640],
@@ -291,6 +286,5 @@ export const deltaT = [
     [2250, 572],
     [2300, 717],
     [2400, 1056],
-    [2500, 1460],
-    [2600, 1927]
+    [2500, 1460]
 ];
