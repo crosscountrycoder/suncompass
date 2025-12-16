@@ -300,10 +300,6 @@ export function dayStarts(start: DateTime, end: DateTime): DateTime[] {
     return dayStarts;
 }
 
-type Seg = { a: number[]; b: number[] };
-// EPS for key-stability with fractional coords
-const SNAP = 1e-6;
-const snap = (v: number) => Math.round(v / SNAP) * SNAP;
 /** Convert a time of day in milliseconds to hh:mm:ss in either 12 or 24-hour format. */
 export function convertToHMS(timeOfDay: number, twentyFourHours: boolean) {
     const timeOfDayS = Math.floor(timeOfDay / 1000);
@@ -319,6 +315,10 @@ export function convertToHMS(timeOfDay: number, twentyFourHours: boolean) {
     else {return `${hour12}:${minString}:${secString} pm`;} // ex: 9:47:29 pm
 }
 
+type Seg = { a: number[]; b: number[] };
+// EPS for key-stability with fractional coords
+const SNAP = 1e-6;
+const snap = (v: number) => Math.round(v / SNAP) * SNAP;
 /** Convert a series of intervals into sets of points representing polygons. */
 export function intervalsToPolygon(intervals: number[][][]): Polygon[] {
     const normalizeSpans = (spans: number[][]): number[][] => {

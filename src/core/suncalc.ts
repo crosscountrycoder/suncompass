@@ -216,6 +216,13 @@ export function subsolarPoint(lod?: LODProfile): number[] {
     return [subsolarLat, subsolarLong];
 }
 
+/** Returns the sun's ECEF coordinates, in kilometers, at the given Unix timestamp in milliseconds. */
+export function sunEcef(unix: number): number[] {
+    const lod = generateLODProfile(unix);
+    const [sunLat, sunLong] = subsolarPoint(lod);
+    return mf.toEcef(sunLat, sunLong, lod.distance);
+}
+
 /**
  * Returns sun position given latitude, longitude, and DateTime.
  * @param lat Latitude in degrees
