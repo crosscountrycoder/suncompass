@@ -19,11 +19,21 @@ the time zone of a geographic coordinate.
 
 import * as mf from "./mathfuncs.ts";
 import {degToRad, sunPeriodicTerms, DAY_LENGTH, BSEARCH_GAP} from "./constants.ts";
-import {generateLODProfile, estimateLOD, getTimeOfDay} from "./lookup-tables.ts";
+import {generateLODProfile, estimateLOD, getTimeOfDay, timeZoneLookupTable, longDistLookupTable} from "./lookup-tables.ts";
 import type {TimeChange, LODProfile, SEvent} from "./lookup-tables.ts";
 import {DateTime} from "luxon";
 
 export type SeasonEvents = {marEquinox: DateTime; junSolstice: DateTime; sepEquinox: DateTime; decSolstice: DateTime;};
+
+export type SunTable = {
+    solarEvents: SEvent[][];
+    dayLengths: number[];
+    solstices: number[];
+    solsticeDates: number[];
+    perihelion: number[];
+    aphelion: number[];
+    timeZoneTable: TimeChange[];
+}
 
 /** Sun's mean longitude according to formula 27.2 in Astronomical Algorithms. 
  * @param date The timestamp.
@@ -65,23 +75,20 @@ export function equationOfCenter(JC: number): number {
 } */
 
 /** Distance from sun to earth in kilometers. 
- * @param date The timestamp. Can be specified as a Luxon DateTime, a Unix timestamp, or a Julian century.
+ * @param date The timestamp. Can be specified as a Unix timestamp, or a Julian century.
  * @param unix If date is a number, this parameter specifies whether it's measured in Unix milliseconds or Julian centuries.
 */
-export function sunDistance(date: number | DateTime, unix = false): number {
-    if (typeof(date) === "number") {
-        if (!unix) {
-            const U = date / 100;
-            let dist = 1.0001026; // in astronomical units
-            for (let i=0; i<sunPeriodicTerms.length; i++) {
-                const curRow = sunPeriodicTerms[i];
-                dist += (1e-7 * curRow[1] * Math.cos(curRow[2]+curRow[3]*U));
-            }
-            return 149597870.7 * dist; // convert to kilometers
+export function sunDistance(date: number, unix = false): number {
+    if (!unix) {
+        const U = date / 100;
+        let dist = 1.0001026; // in astronomical units
+        for (let i=0; i<sunPeriodicTerms.length; i++) {
+            const curRow = sunPeriodicTerms[i];
+            dist += (1e-7 * curRow[1] * Math.cos(curRow[2]+curRow[3]*U));
         }
-        else {return sunDistance(mf.jCentury(date));}
+        return 149597870.7 * dist; // convert to kilometers
     }
-    else {return sunDistance(mf.jCentury(mf.ms(date)));}
+    else {return sunDistance(mf.jCentury(date));}
 }
 
 /**
@@ -334,30 +341,20 @@ export function derivative(lat: number, long: number, unix: number, startLOD: LO
 export function maxAndMin(lat: number, long: number, start: LODProfile, end: LODProfile): number[] {
     const startTime = start.unix, endTime = end.unix;
     const times = [startTime];
-    const intervals = [startTime,startTime+4*3.6e6,startTime+8*3.6e6,startTime+12*3.6e6,startTime+16*3.6e6,startTime+20*3.6e6,endTime];
-    for (let i=0; i<intervals.length-1; i++) {
+    const interval = (endTime - startTime) / 6;
+    for (let t = startTime; t < endTime; t += interval) {
         // use binary search to find the time closest to zero derivative
-        let t0 = intervals[i], t1 = intervals[i+1];
+        let t0 = t, t1 = Math.min(t + interval, endTime);
         let d0 = derivative(lat, long, t0, start, end), d1 = derivative(lat, long, t1, start, end);
-        if (d0 >= 0 && d1 < 0) { // maximum (i.e. solar noon, or summer solstice at pole)
+        if (d0 === 0) {times.push(t0);}
+        else if (d0 * d1 < 0) { // derivative changes sign
             while (t1 - t0 > BSEARCH_GAP) {
                 const tAvg = (t0+t1)/2;
                 const dAvg = derivative(lat, long, tAvg, start, end);
-                if (dAvg >= 0) {t0 = tAvg; d0 = dAvg;}
+                if (d1 * dAvg <= 0) {t0 = tAvg; d0 = dAvg;}
                 else {t1 = tAvg; d1 = dAvg;}
             }
-            // use 5-minute window, then linear interpolation to make calculation faster
-            const t = t0 + (d0 / (d0 - d1)) * (t1 - t0);
-            times.push(t);
-        }
-        else if (d0 <= 0 && d1 > 0) { // minimum (i.e. solar midnight, or winter solstice at pole)
-            while (t1 - t0 > BSEARCH_GAP) {
-                const tAvg = (t0+t1)/2;
-                const dAvg = derivative(lat, long, tAvg, start, end);
-                if (dAvg <= 0) {t0 = tAvg; d0 = dAvg;}
-                else {t1 = tAvg; d1 = dAvg;}
-            }
-            const t = t0 + (d0 / (d0 - d1)) * (t1 - t0);
+            const t = t0 + (d0 / (d0 - d1)) * (t1 - t0); // linear interpolation on 5-minute window
             times.push(t);
         }
     }
@@ -524,15 +521,53 @@ export function sunEventsDay(lat: number, long: number, date: DateTime): SEvent[
 /** Calculates the Unix millisecond timestamp of the solstice or equinox in the given month and year.
  * Month must be 3, 6, 9 or 12.
  */
-export function calcSolstEq(year = DateTime.now().toUTC().year, month: number) {
-    let t0 = mf.ms(DateTime.fromObject({year:year, month:month, day:10}, {zone: "utc"}));
-    let t1 = t0 + 18*DAY_LENGTH; // 18 days after start
-    while (t1 - t0 > 1) {
-        const avg = Math.floor((t0+t1)/2);
-        if (month === 3) {(sunTrueLong(avg, true) >= 180) ? t0 = avg : t1 = avg;}
-        else {(sunTrueLong(avg, true) <= 30*(month-3)) ? t0 = avg : t1 = avg;}
+export function calcSolstEq(year: number, month: 3 | 6 | 9 | 12) {
+    let t0 = (year - 1970) * 31556952000 + (month - 1) * 2629746000;
+    let t1 = t0 + 2629746000; // approx. 1 month after start
+    let l0 = sunTrueLong(t0, true);
+    let l1 = sunTrueLong(t1, true);
+    if (l0 > l1) {l0 -= 360;}
+    const thresh = (month - 3) * 30;
+    while (t1 - t0 > 9e5) { // 15 minutes
+        const tAvg = (t0 + t1) / 2;
+        let lAvg = sunTrueLong(tAvg, true);
+        if (lAvg >= l1) {lAvg -= 360;}
+        if (lAvg <= thresh) {t0 = tAvg; l0 = lAvg;}
+        else {t1 = tAvg; l1 = lAvg;}
     }
-    return t0;
+    // linear interpolation within 2.5 to 5 minute window
+    const frac = (thresh - l0) / (l1 - l0);
+    const t = Math.floor(t0 + frac * (t1 - t0));
+    return t;
+}
+
+/** Calculates the sun's apsides (aphelion and perihelion) for a particular year bounded by start and end Unix timestamps.
+ * Aphelion is when the earth is furthest from the sun, and perihelion is when it is closest.
+ */
+export function sunApsides(start: number, end: number) {
+    const interval = (end - start) / 12;
+    const delta = 6e5; // 10 minutes
+    const window = 3.6e6; // 1 hour
+    const aphelion: number[] = [];
+    const perihelion: number[] = [];
+    for (let t = start; t < end; t += interval) {
+        let t0 = t;
+        let t1 = Math.min(t + interval, end);
+        let d0 = sunDistance(t0+delta, true) - sunDistance(t0-delta, true);
+        let d1 = sunDistance(t1+delta, true) - sunDistance(t1-delta, true);
+        if (d0 === 0) {((d1 > 0) ? perihelion : aphelion).push(t0);}
+        else if (d0 * d1 < 0) {
+            while (t1 - t0 > window) {
+                const tAvg = (t0 + t1) / 2;
+                const dAvg = sunDistance(tAvg+delta, true) - sunDistance(tAvg-delta, true);
+                if (d1 * dAvg <= 0) {t0 = tAvg; d0 = dAvg;}
+                else {t1 = tAvg; d1 = dAvg;}
+            }
+            const tApsis = Math.floor(t0 + (d0 / (d0 - d1)) * (t1 - t0)); // linear interpolation of derivative
+            ((d1 > 0) ? perihelion : aphelion).push(tApsis);
+        }
+    }
+    return {aphelion: aphelion, perihelion: perihelion}
 }
 
 /**
@@ -624,7 +659,7 @@ export function intervalsSvg(sunEvents: SEvent[], timeZone: TimeChange[]): numbe
     const aIntervals: number[][] = []; // daylight + civil twilight + nautical twilight + astronomical twilight
     
     let etype = newSunEvents[0].type;
-    let s = mf.intDiv(getTimeOfDay(newSunEvents[0].unix, timeZone),1000);
+    let s = Math.floor(getTimeOfDay(newSunEvents[0].unix, timeZone) / 1000);
 
     // push the first interval
     if (etype === "Astro Dawn") {
@@ -659,7 +694,7 @@ export function intervalsSvg(sunEvents: SEvent[], timeZone: TimeChange[]): numbe
 
     for (let i=1; i<newSunEvents.length; i++) {
         etype = newSunEvents[i].type;
-        s = mf.intDiv(getTimeOfDay(newSunEvents[i].unix, timeZone),1000);
+        s = Math.floor(getTimeOfDay(newSunEvents[i].unix, timeZone)/1000);
         if (etype === "Astro Dawn") {aIntervals.push([s, 86400]);}
         else if (etype === "Nautical Dawn") {nIntervals.push([s, 86400]);}
         else if (etype === "Civil Dawn") {cIntervals.push([s, 86400]);}
@@ -689,7 +724,7 @@ export function intervalsNightCivilTwilight(sunEvents: SEvent[], timeZone: TimeC
     const cIntervals: number[][] = []; // civil twilight intervals
 
     let etype = newSunEvents[0].type;
-    let s = mf.intDiv(getTimeOfDay(newSunEvents[0].unix, timeZone),1000);
+    let s = Math.floor(getTimeOfDay(newSunEvents[0].unix, timeZone)/1000);
     if (etype === "Civil Dawn") {
         nIntervals.push([0, s]);
         cIntervals.push([s, 86400]);
@@ -707,7 +742,7 @@ export function intervalsNightCivilTwilight(sunEvents: SEvent[], timeZone: TimeC
 
     for (let i=1; i<newSunEvents.length; i++) {
         etype = newSunEvents[i].type;
-        s = mf.intDiv(getTimeOfDay(newSunEvents[i].unix, timeZone),1000);
+        s = Math.floor(getTimeOfDay(newSunEvents[i].unix, timeZone)/1000);
         if (etype === "Civil Dawn") {
             nIntervals[nIntervals.length-1][1] = s;
             cIntervals.push([s, 86400]);
@@ -774,8 +809,55 @@ export function lengths(sunEvents: SEvent[], timeZone: TimeChange[]): number[] {
     else if (etype === "Civil Dawn" || etype === "Sunset") {durations[1] += ms;}
     else if (etype === "Sunrise") {durations[0] += ms;}
 
-    return [mf.intDiv(durations[0],1000), 
-    mf.intDiv(durations[0]+durations[1],1000), 
-    mf.intDiv(durations[0]+durations[1]+durations[2],1000),
-    mf.intDiv(durations[0]+durations[1]+durations[2]+durations[3],1000)];
+    return [Math.floor(durations[0]/1000), 
+    Math.floor((durations[0]+durations[1])/1000), 
+    Math.floor((durations[0]+durations[1]+durations[2])/1000),
+    Math.floor((durations[0]+durations[1]+durations[2]+durations[3])/1000)];
+}
+
+/** Generate an object containing sunrise, sunset, twilight, solar noon and solar midnight times, day lengths,
+ * solstices and equinoxes (grouped under "solstices"), perihelion, aphelion, and the time zone lookup table for
+ * the given zone in the given year.
+ */
+export function generateSunTable(lat: number, long: number, year: number, zone: string): SunTable {
+    const yearStart = DateTime.fromObject({year: year}, {zone: zone});
+    const yearEnd = DateTime.fromObject({year: year + 1}, {zone: zone});
+
+    // dayStarts has 1-day buffer due to nature of the dayLengths function
+    const dayStarts = mf.dayStarts(yearStart.minus({days:1}), yearEnd.plus({days:1}));
+    const timeZoneTable = timeZoneLookupTable(dayStarts.slice(1, -1)); // time zone lookup table
+    const lodLookupTable = longDistLookupTable(dayStarts);
+
+    const sunEventsYear: SEvent[][] = [];
+    for (let i=0; i<lodLookupTable.length-1; i++) {
+        const start = lodLookupTable[i], end = lodLookupTable[i+1];
+        sunEventsYear.push(allSunEvents(lat, long, start, end));
+    }
+    const sunEventsYearM = sunEventsYear.slice(1, -1);
+
+    const dayLengths: number[] = [];
+    for (let i=1; i<sunEventsYear.length-1; i++) {
+        const l = dayLength(mf.ms(dayStarts[i]), sunEventsYear[i-1], sunEventsYear[i], sunEventsYear[i+1]);
+        dayLengths.push(l);
+    }
+
+    const solstices = [calcSolstEq(year, 3), calcSolstEq(year, 6), calcSolstEq(year, 9), calcSolstEq(year, 12)];
+    const solsticeDates = [
+        DateTime.fromMillis(solstices[0], {zone: zone}).diff(yearStart, ["days", "hours"]).toObject().days!,
+        DateTime.fromMillis(solstices[1], {zone: zone}).diff(yearStart, ["days", "hours"]).toObject().days!,
+        DateTime.fromMillis(solstices[2], {zone: zone}).diff(yearStart, ["days", "hours"]).toObject().days!,
+        DateTime.fromMillis(solstices[3], {zone: zone}).diff(yearStart, ["days", "hours"]).toObject().days!
+    ]; // days of the solstice/equinox, where January 1 is "day 0"
+
+    const apsides = sunApsides(mf.ms(yearStart), mf.ms(yearEnd));
+
+    return {
+        solarEvents: sunEventsYearM,
+        dayLengths: dayLengths,
+        solstices: solstices,
+        solsticeDates: solsticeDates,
+        perihelion: apsides.perihelion,
+        aphelion: apsides.aphelion,
+        timeZoneTable: timeZoneTable
+    }
 }

@@ -2,9 +2,22 @@
 
 import * as mf from "./mathfuncs.ts";
 import * as sc from "./suncalc.ts";
-import {BSEARCH_GAP, degToRad, moonPtl, moonPtld} from "./constants.ts";
-import { generateLODProfile, getTimeOfDay, type SEvent, type TimeChange } from "./lookup-tables.ts";
-import type { DateTime } from "luxon";
+import {BSEARCH_GAP, DAY_LENGTH, degToRad, moonPtl, moonPtld} from "./constants.ts";
+import { generateLODProfile, getTimeOfDay, timeZoneLookupTable, type SEvent, type TimeChange } from "./lookup-tables.ts";
+import { DateTime } from "luxon";
+
+export type MoonTable = {
+    lunarEvents: SEvent[][];
+    intervals: number[][][];
+    phases: {
+        unix: number;
+        date: number;
+        type: number;
+    }[];
+    perigees: number[];
+    apogees: number[];
+    timeZoneTable: TimeChange[];
+}
 
 export function moonMeanLongitude(JC: number): number {
     return mf.mod(218.3164591 + 481267.88134236*JC - 0.0013268*JC**2 + JC**3/538841 - JC**4/65194000, 360);
@@ -217,21 +230,12 @@ export function moonMaxMin(lat: number, long: number, start: number, end: number
     for (let i=0; i<intervals.length; i++) {
         let t0 = intervals[i], t1 = intervals[i+1];
         let d0 = moonDerivative(lat, long, t0), d1 = moonDerivative(lat, long, t1);
-        if (d0 >= 0 && d1 < 0) { // maximum (i.e. solar noon, or summer solstice at pole)
+        if (d0 === 0) {times.push(t0);}
+        else if (d0 * d1 < 0) { // derivative changes sign
             while (t1 - t0 > BSEARCH_GAP) {
                 const tAvg = (t0+t1)/2;
                 const dAvg = moonDerivative(lat, long, tAvg);
-                if (dAvg >= 0) {t0 = tAvg; d0 = dAvg;}
-                else {t1 = tAvg; d1 = dAvg;}
-            }
-            const t = t0 + (d0 / (d0 - d1)) * (t1 - t0);
-            times.push(t);
-        }
-        else if (d0 <= 0 && d1 > 0) { // minimum (i.e. solar midnight, or winter solstice at pole)
-            while (t1 - t0 > BSEARCH_GAP) {
-                const tAvg = (t0+t1)/2;
-                const dAvg = moonDerivative(lat, long, tAvg);
-                if (dAvg <= 0) {t0 = tAvg; d0 = dAvg;}
+                if (d1 * dAvg <= 0) {t0 = tAvg; d0 = dAvg;}
                 else {t1 = tAvg; d1 = dAvg;}
             }
             const t = t0 + (d0 / (d0 - d1)) * (t1 - t0);
@@ -416,6 +420,49 @@ export function moonPhaseDay(start: number, end: number): string {
     else {return (diff1 < diff0) ? "New Moon" : "Waning Crescent";}
 }
 
+/**
+ * Returns the moon's apsides (perigee or apogee) on a given day.
+ * @param start Start of the day in Unix milliseconds
+ * @param end End of the day in Unix milliseconds
+ * @returns An object with the time of the event (in Unix milliseconds) and the type (perigee or apogee).
+ * Perigee occurs when the moon is closest to earth, apogee is when the moon is furthest from earth.
+ */
+export function moonApsis(start: number, end: number) {
+    const delta = 6e4; // 1 minute
+    const window = 6e5; // 10 minutes
+    let t0 = start, t1 = end;
+    let d0 = moonDistance(t0+delta, true) - moonDistance(t0-delta, true);
+    let d1 = moonDistance(t1+delta, true) - moonDistance(t1-delta, true);
+    const type = ((d1 > 0) ? "Perigee" : "Apogee");
+    if (d0 === 0) {return {time: t0, type: type};}
+    else if (d0 * d1 < 0) { // sign change in derivative
+        while (t1 - t0 > window) {
+            const tAvg = (t0 + t1) / 2;
+            const dAvg = moonDistance(tAvg+delta, true) - moonDistance(tAvg-delta, true);
+            if (d1 * dAvg <= 0) {t0 = tAvg; d0 = dAvg;}
+            else {t1 = tAvg; d1 = dAvg;}
+        }
+        const tApsis = Math.floor(t0 + (d0 / (d0 - d1)) * (t1 - t0));
+        return {time: tApsis, type: type};
+    }
+    else {return null;}
+}
+
+/** Returns the moon's apsides (perigees and apogees) during a multi-day period, starting with start and ending with
+ * end. Both start and end are given in Unix milliseconds.
+ */
+export function moonApsides(start: number, end: number) {
+    const perigees: number[] = [], apogees: number[] = [];
+    for (let t = start; t < end; t += DAY_LENGTH) {
+        const ma = moonApsis(t, Math.min(t + DAY_LENGTH, end));
+        if (ma !== null) {
+            if (ma.type === "Perigee") {perigees.push(ma.time);}
+            else if (ma.type === "Apogee") {apogees.push(ma.time);}
+        }
+    }
+    return {apogees: apogees, perigees: perigees};
+}
+
 /** Returns all moonrises, moonsets, meridian passings, full moons, new moons, and first/last quarters on a given day. */
 export function allMoonEvents(lat: number, long: number, start: number, end: number): SEvent[] {
     const maxMin = moonMaxMin(lat, long, start, end);
@@ -448,31 +495,73 @@ export function moonIntervals(lat: number, long: number, dayStart: number, event
     }
     else if (newMoonEvents[0].type === "Moonrise") {
         if (newMoonEvents.length === 1) {
-            return [[mf.intDiv(getTimeOfDay(newMoonEvents[0].unix, timeZone),1000), 86400]];
+            return [[Math.floor(getTimeOfDay(newMoonEvents[0].unix, timeZone)/1000), 86400]];
         } else if (newMoonEvents.length === 2) {
-            return [[mf.intDiv(getTimeOfDay(newMoonEvents[0].unix, timeZone),1000), 
-            mf.intDiv(getTimeOfDay(newMoonEvents[1].unix, timeZone),1000)]];
+            return [[Math.floor(getTimeOfDay(newMoonEvents[0].unix, timeZone)/1000), 
+            Math.floor(getTimeOfDay(newMoonEvents[1].unix, timeZone)/1000)]];
         } else if (newMoonEvents.length === 3) {
-            return [[mf.intDiv(getTimeOfDay(newMoonEvents[0].unix, timeZone),1000), mf.intDiv(getTimeOfDay(newMoonEvents[1].unix, timeZone),1000)],
-                [mf.intDiv(getTimeOfDay(newMoonEvents[2].unix, timeZone),1000), 86400]];
+            return [[Math.floor(getTimeOfDay(newMoonEvents[0].unix, timeZone)/1000), Math.floor(getTimeOfDay(newMoonEvents[1].unix, timeZone)/1000)],
+                [Math.floor(getTimeOfDay(newMoonEvents[2].unix, timeZone)/1000), 86400]];
         } else {
-            return [[mf.intDiv(getTimeOfDay(newMoonEvents[0].unix, timeZone),1000), mf.intDiv(getTimeOfDay(newMoonEvents[1].unix, timeZone),1000)],
-                [mf.intDiv(getTimeOfDay(newMoonEvents[2].unix, timeZone),1000), mf.intDiv(getTimeOfDay(newMoonEvents[3].unix, timeZone),1000)]];
+            return [[Math.floor(getTimeOfDay(newMoonEvents[0].unix, timeZone)/1000), Math.floor(getTimeOfDay(newMoonEvents[1].unix, timeZone)/1000)],
+                [Math.floor(getTimeOfDay(newMoonEvents[2].unix, timeZone)/1000), Math.floor(getTimeOfDay(newMoonEvents[3].unix, timeZone)/1000)]];
         }
     }
     else { // if (newMoonEvents[0].type === "Moonset")
         if (newMoonEvents.length === 1) {
-            return [[0, mf.intDiv(getTimeOfDay(newMoonEvents[0].unix, timeZone),1000)]];
+            return [[0, Math.floor(getTimeOfDay(newMoonEvents[0].unix, timeZone)/1000)]];
         } else if (newMoonEvents.length === 2) {
-            return [[0, mf.intDiv(getTimeOfDay(newMoonEvents[0].unix, timeZone),1000)], 
-                [mf.intDiv(getTimeOfDay(newMoonEvents[1].unix, timeZone),1000), 86400]];
+            return [[0, Math.floor(getTimeOfDay(newMoonEvents[0].unix, timeZone)/1000)], 
+                [Math.floor(getTimeOfDay(newMoonEvents[1].unix, timeZone)/1000), 86400]];
         } else if (newMoonEvents.length === 3) {
-            return [[0, mf.intDiv(getTimeOfDay(newMoonEvents[0].unix, timeZone),1000)], 
-                [mf.intDiv(getTimeOfDay(newMoonEvents[1].unix, timeZone),1000), mf.intDiv(getTimeOfDay(newMoonEvents[2].unix, timeZone),1000)]];
+            return [[0, Math.floor(getTimeOfDay(newMoonEvents[0].unix, timeZone)/1000)], 
+                [Math.floor(getTimeOfDay(newMoonEvents[1].unix, timeZone)/1000), Math.floor(getTimeOfDay(newMoonEvents[2].unix, timeZone)/1000)]];
         } else {
             return [[0, getTimeOfDay(newMoonEvents[0].unix, timeZone)], 
-                [mf.intDiv(getTimeOfDay(newMoonEvents[1].unix, timeZone),1000), mf.intDiv(getTimeOfDay(newMoonEvents[2].unix, timeZone),1000)],
-                [mf.intDiv(getTimeOfDay(newMoonEvents[3].unix, timeZone),1000), 86400]];
+                [Math.floor(getTimeOfDay(newMoonEvents[1].unix, timeZone)/1000), Math.floor(getTimeOfDay(newMoonEvents[2].unix, timeZone)/1000)],
+                [Math.floor(getTimeOfDay(newMoonEvents[3].unix, timeZone)/1000), 86400]];
         }
+    }
+}
+
+export function generateMoonTable(lat: number, long: number, year: number, zone: string) {
+    const yearStart = DateTime.fromObject({year: year}, {zone: zone});
+    const yearEnd = DateTime.fromObject({year: year + 1}, {zone: zone});
+    const dayStarts = mf.dayStarts(yearStart, yearEnd);
+    const timeZoneTable = timeZoneLookupTable(dayStarts); // time zone lookup table
+
+    const moonEventsYear: SEvent[][] = []; // note: this includes phases, but not perigee/apogee
+    const intervals: number[][][] = [];
+    for (let i=0; i<dayStarts.length-1; i++) {
+        const start = mf.ms(dayStarts[i]), end = mf.ms(dayStarts[i+1]);
+        const evts = allMoonEvents(lat, long, start, end);
+        const ints = moonIntervals(lat, long, start, evts, timeZoneTable);
+        moonEventsYear.push(evts);
+        intervals.push(ints);
+    }
+
+    // In the phase table, the type is 0 for new moon, 1 for first quarter, 2 for full moon, 3 for last quarter
+    const phases: {unix: number, date: number, type: number}[] = [];
+    for (const events of moonEventsYear) {
+        for (const event of events) {
+            const type = (event.type === "New Moon" ? 0 : event.type === "First Quarter" ? 1 :
+                event.type === "Full Moon" ? 2 : event.type === "Last Quarter" ? 3 : -1);
+            if (type >= 0) {
+                const date = DateTime.fromMillis(event.unix, {zone: zone}).diff(yearStart, ["days", "hours"]).toObject().days!;
+                phases.push({unix: event.unix, date: date, type: type});
+            }
+        }
+    }
+
+    // (moon furthest from earth). The second number is the earth-moon distance in kilometers.
+    const apsides = moonApsides(mf.ms(yearStart), mf.ms(yearEnd));
+
+    return {
+        lunarEvents: moonEventsYear,
+        intervals: intervals,
+        phases: phases,
+        perigees: apsides.perigees,
+        apogees: apsides.apogees,
+        timeZoneTable: timeZoneTable
     }
 }

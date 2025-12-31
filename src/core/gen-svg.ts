@@ -6,18 +6,15 @@
 
 import {getTimeOfDay} from "./lookup-tables.ts";
 import * as mf from "./mathfuncs.ts";
-import {intervalsSvg, lengths, intervalsNightCivilTwilight} from "./suncalc.ts";
-import {DateTime} from "luxon";
-import type {SEvent, TimeChange} from "./lookup-tables.ts";
+import {intervalsSvg, lengths, intervalsNightCivilTwilight, type SunTable} from "./suncalc.ts";
+import type {MoonTable} from "./mooncalc.ts";
 
 const svgClose = "</svg>";
 const sunColors = ["#80c0ff", "#0060c0", "#004080", "#002040", "#000000"];
 
 type sunSvgOptions = {
-    events: SEvent[][];
+    sunTable: SunTable;
     type: string;
-    timeZone: TimeChange[];
-    solsticesEquinoxes: DateTime[];
     svgWidth?: number;
     svgHeight?: number;
     diagramWidth?: number;
@@ -34,11 +31,8 @@ type sunSvgOptions = {
 };
 
 type moonSvgOptions = {
-    sunEvents: SEvent[][];
-    moonIntervals: number[][][];
-    timeZone: TimeChange[];
-    newMoons: DateTime[];
-    fullMoons: DateTime[];
+    sunTable: SunTable;
+    moonTable: MoonTable;
     svgWidth?: number;
     svgHeight?: number;
     diagramWidth?: number;
@@ -151,7 +145,7 @@ function generateGrid(options: sunSvgOptions | moonSvgOptions, gridlineColor: st
     const textSize = options.textSize!;
     const font = options.font!;
     const gridlineWidth = options.gridlineWidth!;
-    const days = ("events" in options) ? options.events.length : options.sunEvents.length;
+    const days = options.sunTable.solarEvents.length;
     const isLeapYear = (days === 366);
     const scaleX = diagramWidth / days;
     const language = options.language!;
@@ -179,11 +173,9 @@ function generateGrid(options: sunSvgOptions | moonSvgOptions, gridlineColor: st
 /**
  * Returns a string containing an SVG diagram for either day/twilight/night lengths throughout the year, or the times of day in which
  * day, night, and each stage of twilight occur.
- * Parameters should be passed in an object. All parameters except events, type, timeZone, and solsticesEquinoxes are optional.
- * @param events Values of "allSunEvents" for each day of the year.
+ * Parameters should be passed in an object. All parameters except sunTable, type, timeZone, and solsticesEquinoxes are optional.
+ * @param sunTable Values of "generateSunTable" for each day of the year.
  * @param type Set to "length" to generate a day/night/twilight length chart, or "rise-set" to generate a chart with times of day.
- * @param timeZone Time zone, either as an IANA string or a lookup table (see mathfuncs.timeZoneLookupTable)
- * @param solsticesEquinoxes Solstices and equinoxes for the given year, as an array of four DateTimes. They will appear as green lines on the diagram.
  * @param svgWidth Width of the SVG file.
  * @param svgHeight Height of the SVG file.
  * @param diagramWidth Width of the SVG's view box.
@@ -202,10 +194,10 @@ function generateGrid(options: sunSvgOptions | moonSvgOptions, gridlineColor: st
  * bottomPadding.
  */
 export function generateSunSvg(options: sunSvgOptions): string {
-    const {events,type,timeZone,solsticesEquinoxes,svgWidth=1035,svgHeight=535,diagramWidth=1000,diagramHeight=500,leftPadding=25,
+    const {sunTable,type,svgWidth=1035,svgHeight=535,diagramWidth=1000,diagramHeight=500,leftPadding=25,
         rightPadding=10,topPadding=10,bottomPadding=25,textSize=11,font="Arial",language="en",gridInterval=2,gridlineWidth=0.5} 
         = options;
-    const days = events.length; // 365 days for common years, 366 for leap years
+    const days = sunTable.solarEvents.length; // 365 days for common years, 366 for leap years
     const nOptions = // normalized options
     {...options,diagramWidth,diagramHeight,leftPadding,rightPadding,topPadding,bottomPadding,textSize,font,language,gridInterval,gridlineWidth};
 
@@ -226,10 +218,10 @@ export function generateSunSvg(options: sunSvgOptions): string {
     /** Used to draw lines representing solar noon on the graph. */
     function solarNoonLines() {
         const solarNoons: number[][] = [];
-        for (const evts of events) {
+        for (const evts of sunTable.solarEvents) {
             const curDay: number[] = [];
             for (const event of evts) {
-                if (event.type === "Solar Noon") {curDay.push(mf.intDiv(getTimeOfDay(event.unix, timeZone),1000));}
+                if (event.type === "Solar Noon") {curDay.push(Math.floor(getTimeOfDay(event.unix, sunTable.timeZoneTable)/1000));}
             }
             solarNoons.push(curDay);
         }
@@ -257,10 +249,10 @@ export function generateSunSvg(options: sunSvgOptions): string {
     /** Used to draw lines representing solar midnight on the graph. */
     function solarMidnightLines() {
         const solarMidnights: number[][] = [];
-        for (const evts of events) {
+        for (const evts of sunTable.solarEvents) {
             const curDay: number[] = [];
             for (const event of evts) {
-                if (event.type === "Solar Midnight") {curDay.push(mf.intDiv(getTimeOfDay(event.unix, timeZone),1000));}
+                if (event.type === "Solar Midnight") {curDay.push(Math.floor(getTimeOfDay(event.unix, sunTable.timeZoneTable)/1000));}
             }
             solarMidnights.push(curDay);
         }
@@ -311,8 +303,8 @@ export function generateSunSvg(options: sunSvgOptions): string {
         const cLengths: number[] = []; // day + civil twilight lengths
         const nLengths: number[] = []; // day + civil + nautical twilight lengths
         const aLengths: number[] = []; // day + civil + nautical + astronomical twilight lengths
-        for (const e of events) {
-            const dur = lengths(e, timeZone);
+        for (const e of sunTable.solarEvents) {
+            const dur = lengths(e, sunTable.timeZoneTable);
             dLengths.push(dur[0]);
             cLengths.push(dur[1]);
             nLengths.push(dur[2]);
@@ -336,8 +328,8 @@ export function generateSunSvg(options: sunSvgOptions): string {
         const cIntervals: number[][][] = []; // intervals of civil twilight or brighter
         const dIntervals: number[][][] = []; // intervals of daylight
 
-        for (const event of events) {
-            const int = intervalsSvg(event, timeZone);
+        for (const event of sunTable.solarEvents) {
+            const int = intervalsSvg(event, sunTable.timeZoneTable);
             aIntervals.push(int[3]);
             nIntervals.push(int[2]);
             cIntervals.push(int[1]);
@@ -358,9 +350,8 @@ export function generateSunSvg(options: sunSvgOptions): string {
     }
     
     // draw solstices and equinoxes as green lines
-    for (const date of Object.values(solsticesEquinoxes)) {
-        const newYear = DateTime.fromISO(`${date.year}-01-01`, {zone: date.zone});
-        const x = date.diff(newYear, ['days', 'hours']).days + 0.5;
+    for (const date of Object.values(sunTable.solsticeDates)) {
+        const x = date + 0.5;
         const p1: mf.Point = [x, 86400], p2: mf.Point = [x, 0];
         svgString += lineSvg(p1, p2, "#00c000", 1, 2, true);
     }
@@ -372,11 +363,8 @@ export function generateSunSvg(options: sunSvgOptions): string {
  * Returns a string containing an SVG diagram showing moonrise and moonset times for every day of the year, along with new and
  * full moons and overlays for night and civil twilight.
  * Parameters should be passed in an object. All parameters except events, type, timeZone, and solsticesEquinoxes are optional.
- * @param sunEvents Values of "allSunEvents" for each day of the year.
- * @param moonIntervals Values of "moonIntervals" for each day of the year.
- * @param timeZone Time zone, either as an IANA string or a lookup table (see mathfuncs.timeZoneLookupTable)
- * @param newMoons Array of DateTimes, representing new moons.
- * @param fullMoons Array of DateTimes, representing full moons. 
+ * @param sunTable Values of "generateSunTable" for each day of the year.
+ * @param moonTable Values of "generateMoonTable" for each day of the year.
  * @param svgWidth Width of the SVG file.
  * @param svgHeight Height of the SVG file.
  * @param diagramWidth Width of the SVG's view box.
@@ -395,10 +383,10 @@ export function generateSunSvg(options: sunSvgOptions): string {
  * bottomPadding.
  */
 export function generateMoonSvg(options: moonSvgOptions) {
-    const {sunEvents,moonIntervals,timeZone,newMoons,fullMoons,svgWidth=1035,svgHeight=535,diagramWidth=1000,
+    const {sunTable,moonTable,svgWidth=1035,svgHeight=535,diagramWidth=1000,
         diagramHeight=500,leftPadding=25,rightPadding=10,topPadding=10,bottomPadding=25,textSize=11,font="Arial",
         language="en",gridInterval=2,gridlineWidth=0.5} = options;
-    const days = sunEvents.length; // 365 days for common years, 366 for leap years
+    const days = sunTable.solarEvents.length; // 365 days for common years, 366 for leap years
     const nOptions = // normalized options
     {...options,diagramWidth,diagramHeight,leftPadding,rightPadding,topPadding,bottomPadding,textSize,font,language,gridInterval,gridlineWidth};
     
@@ -422,38 +410,29 @@ export function generateMoonSvg(options: moonSvgOptions) {
     ` scale(${scaleX.toPrecision(8)}, ${scaleY.toPrecision(8)})">\n`;
     
     // add light blue polygons (when moon above horizon)
-    const moonPolygons = toPolygons(moonIntervals, "#80c0ff");
+    const moonPolygons = toPolygons(moonTable.intervals, "#80c0ff");
     for (const polygon of moonPolygons) {svgString += polygon;}
 
     // draw lines for new and full moons
-    for (const date of newMoons) {
-        const newYear = DateTime.fromISO(`${date.year}-01-01`, {zone: date.zone});
-        const x = date.diff(newYear, ['days', 'hours']).days;
-        const lines: mf.Point[][] = [];
-        for (const interval of moonIntervals[x]) {
-            lines.push([[x+0.5, interval[0]], [x+0.5, interval[1]]]);
-        }
-        for (const line of lines) {
-            svgString += lineSvg(line[0], line[1], "#ff0000", 1, 2, true);
-        }
-    }
-    for (const date of fullMoons) {
-        const newYear = DateTime.fromISO(`${date.year}-01-01`, {zone: date.zone});
-        const x = date.diff(newYear, ['days', 'hours']).days;
-        const lines: mf.Point[][] = [];
-        for (const interval of moonIntervals[x]) {
-            lines.push([[x+0.5, interval[0]], [x+0.5, interval[1]]]);
-        }
-        for (const line of lines) {
-            svgString += lineSvg(line[0], line[1], "#0000ff", 1, 2, true);
+    for (const phase of moonTable.phases) {
+        if (phase.type % 2 === 0) {   
+            const x = phase.date;
+            const lines: mf.Point[][] = [];
+            const color = (phase.type === 0) ? "#ff0000" : "#0000ff"; // red = new moon, blue = full moon
+            for (const interval of moonTable.intervals[x]) {
+                lines.push([[x+0.5, interval[0]], [x+0.5, interval[1]]]);
+            }
+            for (const line of lines) {
+                svgString += lineSvg(line[0], line[1], color, 1, 2, true);
+            }
         }
     }
 
     // add night and civil twilight overlays
     const nIntervals: number[][][] = [];
     const cIntervals: number[][][] = [];
-    for (let i=0; i<sunEvents.length; i++) {
-        const [nIntervalsI, cIntervalsI] = intervalsNightCivilTwilight(sunEvents[i], timeZone);
+    for (let i=0; i<days; i++) {
+        const [nIntervalsI, cIntervalsI] = intervalsNightCivilTwilight(sunTable.solarEvents[i], sunTable.timeZoneTable);
         nIntervals.push(nIntervalsI);
         cIntervals.push(cIntervalsI);
     }

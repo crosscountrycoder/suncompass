@@ -1,8 +1,13 @@
 // This file contains constant values such as the conversion factor between degrees and radians, as well as periodic terms for 
 // calculation of the sun and moon positions.
 
-/** The number of radians in a degree, or the factor to multiply by when converting an angle from degrees to radians. */
-export const degToRad = Math.PI/180;
+/** The ratio of a circle's circumference to its radius, or the number of radians in a full rotation. Equal to 2*pi. */
+export const TAU = 2*Math.PI;
+
+/** The number of radians in a degree, or the factor to multiply by when converting an angle from degrees to radians. 
+ * To convert from radians to degrees, divide by degToRad.
+*/
+export const degToRad = TAU/360;
 
 /** Earth's equatorial radius in kilometers (WGS84 ellipsoid) */
 export const earthERadius = 6378.137;
@@ -81,8 +86,8 @@ export const sunPeriodicTerms = [
  * M: multiple of sun's mean anomaly
  * M': multiple of moon's mean anomaly
  * F: multiple of moon's argument of latitude
- * Σl: coefficient of sine argument
- * Σr: coefficient of cosine argument
+ * Σl: coefficient of sine argument (for longitude)
+ * Σr: coefficient of cosine argument (for distance)
  */
 export const moonPtld =
 [
@@ -154,7 +159,6 @@ export const moonPtld =
  * M': multiple of moon's mean anomaly
  * F: multiple of moon's argument of latitude
  * Σl: coefficient of sine argument
- * Σr: coefficient of cosine argument
  */
 export const moonPtl = [
     [0,0,0,1,5128122],

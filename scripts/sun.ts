@@ -6,13 +6,6 @@ import { generateLODProfile, timeZoneLookupTable, sunEventString } from "../src/
 import fs from "fs";
 import path from "path";
 
-type RawSeasonRecord = {year: number; marEquinox: string; junSolstice: string; sepEquinox: string; decSolstice: string;};
-function solsticesEquinoxes(): RawSeasonRecord[] {
-  const jsonPath = path.join("public", "data", "solstices_equinoxes.json");
-  const raw = fs.readFileSync(jsonPath, "utf8");
-  return JSON.parse(raw) as RawSeasonRecord[];
-}
-
 const args = process.argv;
 let lat: number, long: number, zone: string, date: DateTime | undefined;
 if (args.length === 4) { 
@@ -34,11 +27,10 @@ else if (args.length === 5) {
     [lat, long] = [Number(args[2]), Number(args[3])];
     zone = find(lat, long)[0];
     const curYear = DateTime.now().setZone(zone).year;
-    const solstices = solsticesEquinoxes();
-    if (args[4] === "me") {date = DateTime.fromISO(solstices[curYear].marEquinox, {zone: zone});}
-    else if (args[4] === "js") {date = DateTime.fromISO(solstices[curYear].junSolstice, {zone: zone});}
-    else if (args[4] === "se") {date = DateTime.fromISO(solstices[curYear].sepEquinox, {zone: zone});}
-    else if (args[4] === "ds") {date = DateTime.fromISO(solstices[curYear].decSolstice, {zone: zone});}
+    if (args[4] === "me") {date = DateTime.fromMillis(sc.calcSolstEq(curYear, 3), {zone: zone});}
+    else if (args[4] === "js") {date = DateTime.fromMillis(sc.calcSolstEq(curYear, 6), {zone: zone});}
+    else if (args[4] === "se") {date = DateTime.fromMillis(sc.calcSolstEq(curYear, 9), {zone: zone});}
+    else if (args[4] === "ds") {date = DateTime.fromMillis(sc.calcSolstEq(curYear, 12), {zone: zone});}
     else {date = DateTime.fromISO(args[4], {zone: zone});}
 }
 else {

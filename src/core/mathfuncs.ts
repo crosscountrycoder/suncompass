@@ -7,8 +7,7 @@ export type Polyline = Point[];
 
 /** Divide x by y, rounding the output to the nearest integer with smaller absolute value. */
 export function intDiv(x: number, y: number) {
-    if (x<0) {return Math.ceil(x/y);}
-    else {return Math.floor(x/y);}
+    return Math.trunc(x / y);
 }
 
 /** Same as the toMillis() method in Luxon, but truncated to the nearest integer. */
