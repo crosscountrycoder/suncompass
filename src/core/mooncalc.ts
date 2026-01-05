@@ -227,9 +227,9 @@ export function moonDerivative(lat: number, long: number, unix: number): number 
  */
 export function moonMaxMin(lat: number, long: number, start: number, end: number): number[] {
     const times = [start];
-    const intervals = [start,start+4*3.6e6,start+8*3.6e6,start+12*3.6e6,start+16*3.6e6,start+20*3.6e6,end];
-    for (let i=0; i<intervals.length; i++) {
-        let t0 = intervals[i], t1 = intervals[i+1];
+    const interval = (end - start) / 6;
+    for (let t = start; t < end; t += interval) {
+        let t0 = t, t1 = Math.min(t + interval, end);
         let d0 = moonDerivative(lat, long, t0), d1 = moonDerivative(lat, long, t1);
         if (d0 === 0) {times.push(t0);}
         else if (d0 * d1 < 0) { // derivative changes sign
@@ -239,7 +239,7 @@ export function moonMaxMin(lat: number, long: number, start: number, end: number
                 if (d1 * dAvg <= 0) {t0 = tAvg; d0 = dAvg;}
                 else {t1 = tAvg; d1 = dAvg;}
             }
-            const t = t0 + (d0 / (d0 - d1)) * (t1 - t0);
+            const t = t0 + (d0 / (d0 - d1)) * (t1 - t0); // linear interpolation on 5-minute window
             times.push(t);
         }
     }
