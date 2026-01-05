@@ -3,6 +3,7 @@ import {DateTime} from "luxon";
 import * as mf from "../src/core/mathfuncs.ts";
 import {find} from "geo-tz";
 import {timeZoneLookupTable, moonEventString} from "../src/core/lookup-tables.ts";
+import { degToRad } from "../src/core/constants.ts";
 
 const args = process.argv;
 let lat: number, long: number, zone: string, date: DateTime | undefined;
@@ -39,17 +40,17 @@ else {
     const dayStarts = mf.dayStarts(DateTime.fromObject({year: date.year}, {zone: date.zone}), 
         DateTime.fromObject({year: date.year+1}, {zone: date.zone}));
     const timeZoneTable = timeZoneLookupTable(dayStarts);
-    const [elev, az] = mc.moonPosition(lat, long, mf.ms(date));
-    const [sublunarLat, sublunarLong] = mc.sublunarPoint(mf.ms(date));
-    const apparentElev = mf.refract(elev);
+    const [sublunarLat, sublunarLong] = mc.sublunarPointDeg(mf.ms(date));
+    let [elev, az] = mc.moonPosition(lat * degToRad, long * degToRad, mf.ms(date));
+    let apparentElev = mf.refract(elev);
     const distance = mc.moonDistance(mf.ms(date), true);
     const illumination = mc.illumination(mf.ms(date));
     const phase = mc.moonPhaseDay(mf.ms(date.startOf("day")), mf.ms(date.startOf("day").plus({days: 1})));
     
     console.log(zone);
     console.log(`${date.toLocaleString(DateTime.DATETIME_FULL_WITH_SECONDS)}`);
-    console.log(`Current moon elevation: ${elev.toFixed(4)}° (After refraction: ${apparentElev.toFixed(4)}°)`);
-    console.log(`Current moon bearing: ${az.toFixed(4)}° (${mf.direction(az)})`);
+    console.log(`Current moon elevation: ${(elev/degToRad).toFixed(4)}° (Refracted: ${(apparentElev/degToRad).toFixed(4)}°)`);
+    console.log(`Current moon bearing: ${(az/degToRad).toFixed(4)}° (${mf.direction(az)})`);
     console.log(`Sublunar point: ${sublunarLat.toFixed(4)}, ${sublunarLong.toFixed(4)}`);
     console.log(`Moon-Earth distance: ${Math.round(distance)} km (${Math.round(distance/1.609344)} mi)`);
     console.log(`Illumination: ${(100*illumination).toFixed(2)}%`);

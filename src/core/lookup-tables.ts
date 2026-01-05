@@ -2,7 +2,7 @@ import {DateTime} from "luxon";
 import * as mf from "./mathfuncs.ts";
 import {sunTrueLong, sunDistance, obliquity} from "./suncalc.ts";
 import {illumination} from "./mooncalc.ts";
-import { DAY_LENGTH } from "./constants.ts";
+import { DAY_LENGTH, degToRad, HORIZON, TAU } from "./constants.ts";
 
 /** Object representing the change in a location's time zone. 
  * @param unix the Unix timestamp at which the change occurs.
@@ -13,8 +13,8 @@ export type TimeChange = {unix: number; offset: number; change: boolean};
 
 /** Object representing solar ecliptic longitude, obliquity, and distance (LOD) at a particular Unix moment.
  * @param unix Unix timestamp in milliseconds.
- * @param longitude Solar ecliptic longitude in degrees, range [0, 360).
- * @param obliquity Obliquity of ecliptic in degrees.
+ * @param longitude Solar ecliptic longitude in radians, range [0, TAU).
+ * @param obliquity Obliquity of ecliptic in radians.
  * @param distance Sun-earth distance in kilometers.
  */
 export type LODProfile = {unix: number; longitude: number; obliquity: number; distance: number};
@@ -24,8 +24,8 @@ export type LODProfile = {unix: number; longitude: number; obliquity: number; di
  * @param type Event type. Can be "Solar Midnight", "Astro Dawn", "Nautical Dawn", "Civil Dawn", "Sunrise", "Solar Noon", "Sunset",
  * "Civil Dusk", "Nautical Dusk", "Astro Dusk", "Moonrise", "Moonset", or "Moon Meridian" (i.e. when the moon passes the observer's)
  * meridian.
- * @param elev Sun's elevation above the horizon. Not refracted.
- * @param azimuth Sun's azimuth or compass bearing, in degrees clockwise from north.
+ * @param elev Sun's elevation above the horizon in radians. Not refracted.
+ * @param azimuth Sun's azimuth or compass bearing, in radians clockwise from north.
 */
 export type SEvent = {unix: number, type: string, elev: number, azimuth: number};
 
@@ -77,12 +77,12 @@ export function longDistLookupTable(dayStarts: DateTime[]): LODProfile[] {
  * from the start of the day to the end of the day.
  */
 export function estimateLOD(unix: number, start: LODProfile, end: LODProfile): LODProfile {
-    const diffLong = mf.mod(end.longitude - start.longitude, 360);
+    const diffLong = mf.mod(end.longitude - start.longitude, TAU);
     const diffObliquity = end.obliquity - start.obliquity;
     const diffDistance = end.distance - start.distance;
 
     const fraction = (unix - start.unix) / (end.unix - start.unix);
-    const estLongitude = mf.mod(start.longitude + fraction * diffLong, 360);
+    const estLongitude = mf.mod(start.longitude + fraction * diffLong, TAU);
     const estObliquity = start.obliquity + fraction * diffObliquity;
     const estDistance = start.distance + fraction * diffDistance;
     return {unix: unix, longitude: estLongitude, obliquity: estObliquity, distance: estDistance};
@@ -111,14 +111,14 @@ export function sunEventString(event: SEvent, zoneTable: TimeChange[], twentyFou
     const eventType = event.type.padStart(14);
     const timeOfDay = Math.floor(getTimeOfDay(event.unix, zoneTable));
     const timeString = mf.convertToHMS(timeOfDay, twentyFourHours);
-    const elevStr = mf.refract(event.elev).toFixed(4) + "°";
-    const azStr = (event.azimuth.toFixed(4) + "° " + mf.direction(event.azimuth).padStart(3));
+    const elevStr = (mf.refract(event.elev) / degToRad).toFixed(4) + "°";
+    const azStr = (event.azimuth / degToRad).toFixed(4) + "° " + mf.direction(event.azimuth).padStart(3);
     const eventStr = `${eventType} | ${timeString.padStart(11)} | ${elevStr.padStart(9)} | ${azStr.padStart(13)}`;
 
     const bold = event.type === "Sunrise" || event.type === "Sunset" || event.type === "Solar Noon";
     let [r, g, b] = [128, 128, 128];
     if (event.type === "Sunrise" || event.type === "Sunset") {[r, g, b] = [255, 255, 0];}
-    else if (event.elev >= -5/6) {[r, g, b] = [255, 255, 255];}
+    else if (event.elev >= HORIZON) {[r, g, b] = [255, 255, 255];}
     const colorStr = `\x1b[38;2;${r};${g};${b}m`;
     const boldStr = "\x1b[1m";
     const resetStr = "\x1b[0m";
@@ -137,8 +137,8 @@ export function moonEventString(event: SEvent, zoneTable: TimeChange[], twentyFo
     const eventType = event.type.padStart(16);
     const timeOfDay = Math.floor(getTimeOfDay(event.unix, zoneTable));
     const timeString = mf.convertToHMS(timeOfDay, twentyFourHours);
-    const elevStr = mf.refract(event.elev).toFixed(4) + "°";
-    const azStr = (event.azimuth.toFixed(4) + "° " + mf.direction(event.azimuth).padStart(3));
+    const elevStr = (mf.refract(event.elev) / degToRad).toFixed(4) + "°";
+    const azStr = (event.azimuth / degToRad).toFixed(4) + "° " + mf.direction(event.azimuth).padStart(3);
     const illum = illumination(event.unix);
     const illumStr = (100*illum).toFixed(2) + "%";
     const eventStr = `${eventType} | ${timeString.padStart(11)} | ${elevStr.padStart(9)} | ${azStr.padStart(13)} | ${illumStr.padStart(12)}`;
@@ -146,7 +146,7 @@ export function moonEventString(event: SEvent, zoneTable: TimeChange[], twentyFo
     const bold = event.type === "Moonrise" || event.type === "Moonset" || event.type === "Meridian Passing";
     let [r, g, b] = [128, 128, 128];
     if (event.type === "Moonrise" || event.type === "Moonset") {[r, g, b] = [255, 255, 0];}
-    else if (event.elev >= -5/6) {[r, g, b] = [255, 255, 255];}
+    else if (event.elev >= HORIZON) {[r, g, b] = [255, 255, 255];}
     const colorStr = `\x1b[38;2;${r};${g};${b}m`;
     const boldStr = "\x1b[1m";
     const resetStr = "\x1b[0m";

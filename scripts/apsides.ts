@@ -1,6 +1,6 @@
 import {DateTime} from "luxon";
-import {sunApsides} from "../src/core/suncalc.ts";
-import {moonApsides} from "../src/core/mooncalc.ts";
+import {sunApsides, sunDistance} from "../src/core/suncalc.ts";
+import {moonApsides, moonDistance} from "../src/core/mooncalc.ts";
 import {ms} from "../src/core/mathfuncs.ts";
 
 let year: number;
@@ -21,14 +21,20 @@ console.log("Sun apsides:");
 
 let perihelionStr = "Perihelion: ";
 for (const x of apsidesSun.perihelion) {
-    perihelionStr += (DateTime.fromMillis(x, {zone: zone}).toFormat("MMM d, y HH:mm:ss ZZZZ") + ", ");
+    const distance = sunDistance(x, true);
+    perihelionStr += (DateTime.fromMillis(x, {zone: zone}).toFormat("MMM d, y HH:mm:ss ZZZZ") + 
+    `\x1b[38;2;128;128;128m` +
+    ` (${Math.round(distance)} km / ${Math.round(distance/1.609344)} mi)\x1b[0m, `);
 }
 perihelionStr = perihelionStr.slice(0, -2);
 console.log(perihelionStr);
 
 let aphelionStr = "Aphelion: ";
 for (const x of apsidesSun.aphelion) {
-    aphelionStr += (DateTime.fromMillis(x, {zone: zone}).toFormat("MMM d, y HH:mm:ss ZZZZ") + ", ");
+    const distance = sunDistance(x, true);
+    aphelionStr += (DateTime.fromMillis(x, {zone: zone}).toFormat("MMM d, y HH:mm:ss ZZZZ") + 
+    `\x1b[38;2;128;128;128m` +
+    ` (${Math.round(distance)} km / ${Math.round(distance/1.609344)} mi)\x1b[0m, `);
 }
 aphelionStr = aphelionStr.slice(0, -2);
 console.log(aphelionStr);
@@ -38,9 +44,13 @@ console.log("Moon apsides:")
 
 console.log("Perigees:");
 for (const x of apsidesMoon.perigees) {
-    console.log(DateTime.fromMillis(x, {zone: zone}).toFormat("MMM d, y HH:mm:ss ZZZZ"));
+    const distance = moonDistance(x, true);
+    console.log(DateTime.fromMillis(x, {zone: zone}).toFormat("MMM d, y HH:mm:ss ZZZZ") +
+    ` \x1b[38;2;128;128;128m(${Math.round(distance)} km / ${Math.round(distance/1.609344)} mi)\x1b[0m`);
 }
 console.log("Apogees:");
 for (const x of apsidesMoon.apogees) {
-    console.log(DateTime.fromMillis(x, {zone: zone}).toFormat("MMM d, y HH:mm:ss ZZZZ"));
+    const distance = moonDistance(x, true);
+    console.log(DateTime.fromMillis(x, {zone: zone}).toFormat("MMM d, y HH:mm:ss ZZZZ") +
+    ` \x1b[38;2;128;128;128m(${Math.round(distance)} km / ${Math.round(distance/1.609344)} mi)\x1b[0m`);
 }

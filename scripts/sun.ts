@@ -5,6 +5,7 @@ import * as mf from "../src/core/mathfuncs.ts";
 import { generateLODProfile, timeZoneLookupTable, sunEventString } from "../src/core/lookup-tables.ts";
 import fs from "fs";
 import path from "path";
+import { degToRad } from "../src/core/constants.ts";
 
 const args = process.argv;
 let lat: number, long: number, zone: string, date: DateTime | undefined;
@@ -48,9 +49,9 @@ if (Math.abs(lat) >= 90) {console.log("Latitude must be between -90 and 90, excl
 else if (Math.abs(long) > 180) {console.log("Longitude must be between -180 and 180");}
 else {
     const lod = generateLODProfile(mf.ms(date));
-    const subsolarPoint = sc.subsolarPoint(lod);
-    const [elev, az] = sc.sunPosition(lat, long, lod);
-    const apparentElev = mf.refract(elev);
+    const subsolarPoint = sc.subsolarPointDeg(lod);
+    let [elev, az] = sc.sunPosition(lat * degToRad, long * degToRad, lod);
+    let apparentElev = mf.refract(elev);
     const dist = lod.distance;
 
     const dayStarts = mf.dayStarts(DateTime.fromObject({year: date.year}, {zone: date.zone}), 
@@ -59,8 +60,8 @@ else {
 
     console.log(zone);
     console.log(`${date.toLocaleString(DateTime.DATETIME_FULL_WITH_SECONDS)}`);
-    console.log(`Current sun elevation: ${elev.toFixed(4)}° (After refraction: ${apparentElev.toFixed(4)}°)`);
-    console.log(`Current sun bearing: ${az.toFixed(4)}° (${mf.direction(az)})`);
+    console.log(`Current sun elevation: ${(elev/degToRad).toFixed(4)}° (Refracted: ${(apparentElev/degToRad).toFixed(4)}°)`);
+    console.log(`Current sun bearing: ${(az/degToRad).toFixed(4)}° (${mf.direction(az)})`);
     console.log(`Subsolar point: ${subsolarPoint[0].toFixed(4)}, ${subsolarPoint[1].toFixed(4)}`);
     console.log(`Sun-earth distance: ${dist.toFixed(0)} km (${(dist/1.609344).toFixed(0)} mi)`);
 

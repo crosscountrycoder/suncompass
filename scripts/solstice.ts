@@ -1,6 +1,7 @@
 import {DateTime} from "luxon";
 import {subsolarPoint, calcSolstEq} from "../src/core/suncalc.ts";
 import { generateLODProfile } from "../src/core/lookup-tables.ts";
+import { degToRad } from "../src/core/constants.ts";
 
 let year: number;
 let zone: string;
@@ -29,16 +30,16 @@ const sepDT = DateTime.fromMillis(sep, {zone: zone});
 const decDT = DateTime.fromMillis(dec, {zone: zone});
 
 console.log("March equinox: " + marDT.toFormat("MMM d, y HH:mm:ss ZZZZ"));
-console.log("Subsolar point: " + marSSP[0].toFixed(4) + ", " + marSSP[1].toFixed(4));
+console.log("Subsolar point: " + (marSSP[0] / degToRad).toFixed(4) + ", " + (marSSP[1] / degToRad).toFixed(4));
 console.log();
 
 console.log("June solstice: " + junDT.toFormat("MMM d, y HH:mm:ss ZZZZ"));
-console.log("Subsolar point: " + junSSP[0].toFixed(4) + ", " + junSSP[1].toFixed(4));
+console.log("Subsolar point: " + (junSSP[0] / degToRad).toFixed(4) + ", " + (junSSP[1] / degToRad).toFixed(4));
 console.log();
 
 console.log("September equinox: " + sepDT.toFormat("MMM d, y HH:mm:ss ZZZZ"));
-console.log("Subsolar point: " + sepSSP[0].toFixed(4) + ", " + sepSSP[1].toFixed(4));
+console.log("Subsolar point: " + (sepSSP[0] / degToRad).toFixed(4) + ", " + (sepSSP[1] / degToRad).toFixed(4));
 console.log();
 
 console.log("December solstice: " + decDT.toFormat("MMM d, y HH:mm:ss ZZZZ"));
-console.log("Subsolar point: " + decSSP[0].toFixed(4) + ", " + decSSP[1].toFixed(4));
+console.log("Subsolar point: " + (decSSP[0] / degToRad).toFixed(4) + ", " + (decSSP[1] / degToRad).toFixed(4));

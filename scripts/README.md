@@ -42,3 +42,12 @@ To create charts for the north pole or south pole, set the coordinates to `89.99
 `npx ts-node scripts/moon.ts <latitude> <longitude> [time]`: Prints the position (elevation and compass bearing), sublunar point, distance, phase and illumination of the moon at the given latitude, longitude, and time. Additionally, moonrise, moonset, and meridian transit times are shown. If the phase is "new moon", "first quarter", "full moon", or "last quarter", it shows the exact times of these events.
 
 Unlike for sun.ts, time cannot be specified as "me", "js", "se" or "ds". If time is omitted, it defaults to the current time at the given location.
+
+## apsides.ts
+Syntax: `npx ts-node scripts/apsides.ts [year] [timezone]`. If not specified, year defaults to the current year and timezone
+defaults to the system's time zone. Time zone is in IANA format, for example "utc" or "America/Los_Angeles".
+
+Gives the time of apsides (perigee and apogee) for the sun and moon during a given year. For the sun, these are called perihelion
+(when the sun is closest to earth) and aphelion (when the sun is furthest from earth). For the moon and other celestial bodies,
+perigee and apogee refer to the times when they are closest to and furthest from earth respectively. Distance from earth is
+measured center-to-center.

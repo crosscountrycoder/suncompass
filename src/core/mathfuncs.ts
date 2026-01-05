@@ -1,14 +1,10 @@
 import { DateTime } from 'luxon';
-import {DAY_LENGTH, earthERadius, flattening, J2000UTC, degToRad, deltaT, earthPRadius} from "./constants.ts";
+import {DAY_LENGTH, earthERadius, flattening, J2000UTC, deltaT, earthPRadius, TAU, HORIZON, degToRad} from "./constants.ts";
 
 export type Point = [number, number];
 export type Polygon = Point[];
 export type Polyline = Point[];
-
-/** Divide x by y, rounding the output to the nearest integer with smaller absolute value. */
-export function intDiv(x: number, y: number) {
-    return Math.trunc(x / y);
-}
+export type HourAngleFn = (long: number, unix: number) => number; 
 
 /** Same as the toMillis() method in Luxon, but truncated to the nearest integer. */
 export function ms(date: DateTime) {return Math.trunc(date.toMillis());}
@@ -22,7 +18,9 @@ function fractionalYear(t: number) {
  * Adjusts the given elevation angle (elev) of a celestial object to account for atmospheric refraction.
  */
 export function refract(elev: number): number {
-    const refraction = (elev <= -5/6) ? -0.0089931/Math.tan(elev*degToRad) : (1.02/Math.tan((elev+10.3/(elev+5.11))*degToRad)+0.001927)/60;
+    const refraction = (elev <= HORIZON) ? 
+    -1.569584402829295e-4/Math.tan(elev) : 
+    2.96706e-4/Math.tan(elev + 0.00313756/(0.0891863 + elev)) + 5.608094753118464e-7;
     return elev + refraction;
 }
 
@@ -54,6 +52,23 @@ export function clamp(x: number, min=-1, max=1) {
 /** Calculates x modulo y, where the output is in the range [0, y). */
 export function mod(x: number, y: number) {return ((x % y) + y) % y;}
 
+/** Evaluates the polynomial with given coefficients at the given x-value, using Horner's method.
+ * Example: if coefficients are [2, -3.4, 5.67, -8.9], the polynomial evaluated is 2 - 3.4\*x + 5.67\*x^2 - 8.9\*x^3.
+ * The degree of the polynomial is equal to coefficients.length - 1.
+ */
+export function polynomial(x: number, coefficients: number[]): number {
+    let result = coefficients[coefficients.length - 1];
+    for (let i = coefficients.length - 2; i >= 0; i--) {
+        result = result * x + coefficients[i];
+    }
+    return result;
+}
+
+/** Evaluates the polynomial modulo a specific number. */
+export function polymod(x: number, coefficients: number[], modulus: number): number {
+    return mod(polynomial(x, coefficients), modulus);
+}
+
 /** Calculates the Julian century given the Unix timestamp in milliseconds, corrected for delta T. 
  * Note that there is a maximum error of 1 second due to the difference between UT1 and UTC, known as DUT1.
 */
@@ -70,29 +85,15 @@ export function jCentury(unix: number) {
 export function jdUTC(unix: number) {return unix / DAY_LENGTH + 2440587.5;}
 
 /**
- * Returns the compass point (ex: NE, SSW) given a compass bearing in degrees.
- * @param bearing Compass bearing, in degrees clockwise from north.
+ * Returns the compass point (ex: NE, SSW) given a compass bearing in radians.
+ * @param bearing Compass bearing, in radians clockwise from north.
  * @returns Compass point (either N, NNE, NE, ENE, E, ESE, SE, SSE, S, SSW, SW, WSW, W, WNW, NW, or NNW)
  */
 export function direction(bearing: number) {
-    if (bearing < 0 || bearing >= 360) {bearing = mod(bearing, 360);}
-    if (bearing < 11.25) {return "N";}
-    else if (bearing < 33.75) {return "NNE";}
-    else if (bearing < 56.25) {return "NE";}
-    else if (bearing < 78.75) {return "ENE";}
-    else if (bearing < 101.25) {return "E";}
-    else if (bearing < 123.75) {return "ESE";}
-    else if (bearing < 146.25) {return "SE";}
-    else if (bearing < 168.75) {return "SSE";}
-    else if (bearing < 191.25) {return "S";}
-    else if (bearing < 213.75) {return "SSW";}
-    else if (bearing < 236.25) {return "SW";}
-    else if (bearing < 258.75) {return "WSW";}
-    else if (bearing < 281.25) {return "W";}
-    else if (bearing < 303.75) {return "WNW";}
-    else if (bearing < 326.25) {return "NW";}
-    else if (bearing < 348.75) {return "NNW";}
-    else {return "N";}
+    const directions = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
+    const adjBearing = mod(bearing + TAU/32, TAU);
+    const index = clamp(Math.floor(adjBearing / TAU * 16), 0, 15);
+    return directions[index];
 }
 
 /** Returns the time of day in the DateTime as a number of milliseconds, from 0 (00:00:00.000) to 86399999 (23:59:59.999). */
@@ -168,20 +169,19 @@ export function toFixedS(n: number, precision: number) {
     else {return n.toFixed(precision).replace(/\.?0+$/, "");}
 }
 
-/** Rotate x, y, z around z-axis by theta degrees using right hand rule.
+/** Rotate x, y, z around z-axis by theta radians using right hand rule.
  * Used to convert ECI coordinates to ECEF. Returns an array [x, y, z]
  */
 export function rotateZ(x: number, y: number, z: number, theta: number) {
-    const [cosT, sinT] = [Math.cos(theta*degToRad), Math.sin(theta*degToRad)];
+    const [cosT, sinT] = [Math.cos(theta), Math.sin(theta)];
     const x2 = x * cosT - y * sinT;
     const y2 = x * sinT + y * cosT;
     return [x2, y2, z];
 }
 
-/** Converts geodetic latitude and longitude to rectangular ECEF coordinates in km: [x, y, z] */
+/** Converts geodetic latitude and longitude to rectangular ECEF coordinates in km: [x, y, z]. */
 export function latLongEcef(lat: number, long: number): number[] {
     const e2 = 2*flattening - flattening**2;
-    lat *= degToRad; long *= degToRad;
     const [sinLat, cosLat, sinLong, cosLong] = [Math.sin(lat),Math.cos(lat),Math.sin(long),Math.cos(long)];
     const N = earthERadius / Math.sqrt(1 - e2 * sinLat**2); // radius of curvature in prime vertical
     const [X, Y, Z] = [N*cosLat*cosLong, N*cosLat*sinLong, N*(1-e2)*sinLat]; // observer's ECEF coords
@@ -189,13 +189,12 @@ export function latLongEcef(lat: number, long: number): number[] {
 }
 
 /** Converts geocentric latitude, longitude, and distance (in kilometers) to rectangular ECEF coordinates.
- * @param lat Geocentric latitude.
- * @param long Longitude.
+ * @param lat Geocentric latitude, in radians
+ * @param long Longitude, in radians
  * @param dist Distance from Earth's center in kilometers.
  * @returns ECEF coordinate array: [x, y, z]
  */
 export function toEcef(lat: number, long: number, dist: number): number[] {
-    lat *= degToRad; long *= degToRad;
     const [cosLat, sinLat, cosLong, sinLong] = [Math.cos(lat), Math.sin(lat), Math.cos(long), Math.sin(long)];
     const [x, y, z] = [dist*cosLat*cosLong, dist*cosLat*sinLong, dist*sinLat];
     return [x, y, z];
@@ -203,12 +202,12 @@ export function toEcef(lat: number, long: number, dist: number): number[] {
 
 /** Given the geodetic latitude, longitude, and ECEF of an observer, and the ECEF coordinates of a celestial object, find the
  * elevation and azimuth of the object.
- * @param lat Geodetic latitude of observer.
- * @param long Longitude of observer.
+ * @param lat Geodetic latitude of observer, in radians.
+ * @param long Longitude of observer, in radians.
  * @param ecefO ECEF coordinates of observer.
  * @param ecefC ECEF coordinates of celestial object (planet, moon, star).
- * @returns [elevation, azimuth] of celestial object as seen from observer. Both are given in degrees. Elevation is in degrees
- * above the horizon, and azimuth is in degrees clockwise from north (range 0 <= a < 360).
+ * @returns [elevation, azimuth] of celestial object as seen from observer. Both are given in radians, and should be
+ * multiplied by (360/TAU) to convert to degrees.
  */
 export function elevAzimuth(lat: number, long: number, ecefO: number[], ecefC: number[]): number[] {
     const [xe, ye, ze] = ecefC; // celestial body's ECEF
@@ -216,21 +215,21 @@ export function elevAzimuth(lat: number, long: number, ecefO: number[], ecefC: n
     const [dx, dy, dz] = [xe-xo, ye-yo, ze-zo];
 
     // rotate ECEF coordinates to local ENU (east, north, up) at observer
-    const [latR, longR] = [lat*degToRad, long*degToRad];
-    const [sinLat, cosLat, sinLong, cosLong] = [Math.sin(latR), Math.cos(latR), Math.sin(longR), Math.cos(longR)];
+    const [sinLat, cosLat, sinLong, cosLong] = [Math.sin(lat), Math.cos(lat), Math.sin(long), Math.cos(long)];
     const E = -sinLong * dx + cosLong * dy;
     const N = -sinLat * cosLong * dx - sinLat * sinLong * dy + cosLat * dz;
     const U =  cosLat * cosLong * dx + cosLat * sinLong * dy + sinLat * dz;
 
     // convert ENU to elevation and azimuth
     const R = Math.hypot(E, N, U);
-    const elev = Math.asin(clamp(U / R)) / degToRad; // elevation above horizon
-    const az = mod(Math.atan2(E, N) / degToRad, 360); // degrees clockwise from north
+    const elev = Math.asin(clamp(U / R)); // elevation above horizon
+    const az = mod(Math.atan2(E, N), TAU); // radians clockwise from north
     return [elev, az];
 }
 
 /** Finds the subpoint of a celestial body - the [latitude, longitude] at which the body is directly overhead - given the
  * body's ECEF coordinates.
+ * Latitude and longitude are in radians and are in the range [-TAU/4, TAU/4] and [-TAU/2, TAU/2) respectively.
  */
 export function subpoint(ecef: number[]): number[] {
     const a = earthERadius;
@@ -264,7 +263,7 @@ export function subpoint(ecef: number[]): number[] {
 
     const p = Math.hypot(x, y);
     if (p === 0) { // poles - longitude arbitrary so we use 0
-        return [(z >= 0) ? 90 : -90, 0];
+        return [(z >= 0) ? TAU/4 : -TAU/4, 0];
     }
 
     const lon = Math.atan2(y, x);
@@ -280,7 +279,7 @@ export function subpoint(ecef: number[]): number[] {
         lat = latNext;
     }
 
-    return [clamp(lat / degToRad, -90, 90), mod(lon / degToRad + 180, 360) - 180];
+    return [clamp(lat, -TAU/4, TAU/4), mod(lon + TAU/2, TAU) - TAU/2];
 }
 
 /** Given a start date and an end date, both with the same IANA time zone identifier, return an array of Luxon DateTimes with
@@ -297,6 +296,30 @@ export function dayStarts(start: DateTime, end: DateTime): DateTime[] {
         cur = cur.plus({days: 1}).startOf("day");
     }
     return dayStarts;
+}
+
+export function meridianPassings(
+    long: number, // in radians
+    start: number, // start of day, in Unix milliseconds
+    end: number, // end of day, in Unix milliseconds
+    targetHourAngle: number, // in radians (ex. 0 for solar noon, or +-TAU/2 for solar midnight)
+    hAngle: HourAngleFn // function returning hour angle in radians, range [-TAU/2, TAU/2)
+): number[] 
+{
+    const ha0 = hAngle(long, start), ha1 = hAngle(long, end);
+    const haDiff = mod(ha1 - ha0 - TAU/2, TAU) + TAU/2; // change in hour angle (rad) during the day, range [0.5*tau, 1.5*tau)
+    const targetAdjusted = mod(targetHourAngle - ha0, TAU); // diff between target hour angle and hour angle at 00:00
+
+    const haRate = haDiff / (end - start); // rate at which the hour angle is changing, in radians per millisecond.
+    const times = [];
+    for (let i = targetAdjusted; i < haDiff; i += TAU) {
+        let t = start + i / haRate;
+        const ha = hAngle(long, t);
+        const diff = mod(targetHourAngle - ha + TAU/2, TAU) - TAU/2;
+        t += diff / haRate;
+        times.push(Math.floor(clamp(t, start, end-1)));
+    }
+    return times;
 }
 
 /** Convert a time of day in milliseconds to hh:mm:ss in either 12 or 24-hour format. */

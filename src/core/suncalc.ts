@@ -18,7 +18,7 @@ the time zone of a geographic coordinate.
 */
 
 import * as mf from "./mathfuncs.ts";
-import {degToRad, sunPeriodicTerms, DAY_LENGTH, BSEARCH_GAP} from "./constants.ts";
+import {degToRad, sunPeriodicTerms, DAY_LENGTH, BSEARCH_GAP, TAU, HORIZON, CIVIL_TWILIGHT, NAUTICAL_TWILIGHT, ASTRO_TWILIGHT} from "./constants.ts";
 import {generateLODProfile, estimateLOD, getTimeOfDay, timeZoneLookupTable, longDistLookupTable} from "./lookup-tables.ts";
 import type {TimeChange, LODProfile, SEvent} from "./lookup-tables.ts";
 import {DateTime} from "luxon";
@@ -35,44 +35,42 @@ export type SunTable = {
     timeZoneTable: TimeChange[];
 }
 
-/** Sun's mean longitude according to formula 27.2 in Astronomical Algorithms. 
+/** Sun's mean longitude in radians according to formula 27.2 in Astronomical Algorithms. 
  * @param date The timestamp.
  * @param unix If true, date is measured in Unix milliseconds. If false, date is Julian centuries since J2000 epoch.
 */
 export function sunMeanLong(date: number, unix = false): number {
     if (!unix) { // if date is specified as a Julian century
         const m = date / 10; // Julian millennium
-        return mf.mod(280.4664567 + 360007.6982779*m + 0.03032028*m**2 + m**3/49931 - m**4/15299 - m**5/1988000, 360);
+        return mf.polymod(m, [4.895063111, 6283.319667476, 5.291887e-4, 3.495482270e-7, -1.14081e-6, -8.77932e-9], TAU);
     }
     else {return sunMeanLong(mf.jCentury(date));}
 }
 
-/** Sun's geometric longitude, i.e. longitude excluding aberration and nutation. 
+/** Sun's geometric longitude in radians, i.e. longitude excluding aberration and nutation. 
  * @param date The timestamp.
  * @param unix If true, date is measured in Unix milliseconds. If false, date is Julian centuries since J2000 epoch.
 */
 export function sunGeomLong(date: number, unix = false): number {
     if (!unix) {
-        const U = date / 100;
-        let long = 4.9353929 + 62833.196168*U;
-        for (let i=0; i<sunPeriodicTerms.length; i++) {
-            const curRow = sunPeriodicTerms[i];
-            long += (1e-7 * curRow[0] * Math.sin(curRow[2]+curRow[3]*U));
+        let long = 4.9353929 + 628.33196168*date;
+        for (const curRow of sunPeriodicTerms) {
+            long += curRow[0] * Math.sin(curRow[2]+curRow[3]*date);
         }
-        return mf.mod(long / degToRad, 360);
+        return mf.mod(long, TAU);
     }
     else {return sunGeomLong(mf.jCentury(date));}
 }
 
-/** Formula 45.3, in page 308 of Astronomical Algorithms */
-export function meanSunAnomaly(JC: number): number {return mf.mod(357.5291092 + 35999.0502909*JC - 1.536e-4*JC**2 + JC**3/24490000, 360);}
-export function eccentricity(JC: number): number {return 0.016708617 - 4.2037e-5*JC - 1.236e-7*JC**2;}
+/** Formula 45.3, in page 308 of Astronomical Algorithms. The value returned is in radians */
+export function meanSunAnomaly(JC: number): number {
+    return mf.polymod(JC, [6.240060127, 628.3019551672, -2.68083e-6, 7.1267e-10], TAU);
+}
 
-/* Unused function
-export function equationOfCenter(JC: number): number {
-    const anom = meanSunAnomaly(JC) * degToRad;
-    return (1.9146-0.004817*JC-1.4e-5*JC**2)*Math.sin(anom) + (0.019993-1.01e-4*JC)*Math.sin(2*anom) + 2.9e-4*Math.sin(3*anom);
-} */
+export function eccentricity(JC: number): number {
+    //return 0.016708617 - 4.2037e-5*JC - 1.236e-7*JC**2;
+    return mf.polynomial(JC, [0.016708617, -4.2037e-5, -1.236e-7]);
+}
 
 /** Distance from sun to earth in kilometers. 
  * @param date The timestamp. Can be specified as a Unix timestamp, or a Julian century.
@@ -80,20 +78,28 @@ export function equationOfCenter(JC: number): number {
 */
 export function sunDistance(date: number, unix = false): number {
     if (!unix) {
-        const U = date / 100;
         let dist = 1.0001026; // in astronomical units
-        for (let i=0; i<sunPeriodicTerms.length; i++) {
-            const curRow = sunPeriodicTerms[i];
-            dist += (1e-7 * curRow[1] * Math.cos(curRow[2]+curRow[3]*U));
+        for (const curRow of sunPeriodicTerms) {
+            dist += curRow[1] * Math.cos(curRow[2]+curRow[3]*date);
         }
         return 149597870.7 * dist; // convert to kilometers
     }
     else {return sunDistance(mf.jCentury(date));}
 }
 
+/** Derivative of sun-earth distance with respect to time, in km per second. Used to calculate perihelion and aphelion. */
+export function sunDistanceDerivative(unix: number): number {
+    const date = mf.jCentury(unix);
+    let deriv = 0;
+    for (const curRow of sunPeriodicTerms) { // derivative of cosine is negative sine
+        deriv -= curRow[1] * curRow[3] * Math.sin(curRow[2] + curRow[3]*date);
+    }
+    return 149597870.7 * deriv / (36525 * 86400); // convert AU/century to km/second
+}
+
 /**
- * Calculates the sun's apparent ecliptic longitude to within 0.0009 degrees for years 0-3000. This value is 0 at the March equinox,
- * 90 at the June solstice, 180 at the September equinox, and 270 at the December solstice.
+ * Calculates the sun's apparent ecliptic longitude in radians to within 1.6e-5 rad for years 0-3000. This value is 0 at the
+ * March equinox, 0.25*TAU at the June solstice, 0.5*TAU at the September equinox and 0.75*TAU at the December solstice.
  * @param date The timestamp.
  * @param unix If true, date is measured in Unix milliseconds. If false, date is Julian centuries since J2000 epoch.
  */
@@ -101,126 +107,133 @@ export function sunTrueLong(date: number, unix = false): number {
     if (!unix) {
         const U = date / 100;
         const geoLong = sunGeomLong(date);
-        const aberration = 1e-7*(17*Math.cos(3.1+62830.14*U)-993)/degToRad;
-        const nutation = 1e-7*(-834*Math.sin(2.18-3375.7*U+0.36*U**2)-64*Math.sin(3.51+125666.39*U+0.1*U**2))/degToRad;
-        return mf.mod(geoLong + aberration + nutation, 360);
+        const aberration = 1e-7*(17*Math.cos(3.1+62830.14*U)-993);
+        const nutation = 1e-7*(-834*Math.sin(2.18-3375.7*U+0.36*U**2)-64*Math.sin(3.51+125666.39*U+0.1*U**2));
+        return mf.mod(geoLong + aberration + nutation, TAU);
     }
     else {return sunTrueLong(mf.jCentury(date));}
 }
 
-/** Nutation in obliquity in degrees 
+/** Nutation in obliquity in radians 
  * @param date The timestamp.
  * @param unix If true, date is measured in Unix milliseconds. If false, date is Julian centuries since J2000 epoch.
 */
 export function obNutation(date: number, unix = false) {
     if (!unix) {
-        const L = mf.mod(280.4665 + 36000.7698*date, 360)*degToRad;
-        const Lprime = mf.mod(218.3165 + 481267.8813*date, 360)*degToRad;
-        const omega = mf.mod(125.04452 - 1934.136261*date + 0.0020708*date**2 + date**3/450000, 360)*degToRad;
-        return (9.2*Math.cos(omega) + 0.57*Math.cos(2*L) + 0.1*Math.cos(2*Lprime) - 0.09*Math.cos(2*omega)) / 3600;
+        const L = mf.mod(4.895064 + 628.3319663*date, TAU);
+        const Lprime = mf.mod(3.810342 + 8399.709113*date, TAU);
+        const omega = mf.polymod(date, [2.1824386, -33.75704594, 3.61423e-5, 3.87851e-8], TAU);
+        return 4.5e-5*Math.cos(omega) + 2.8e-6*Math.cos(2*L) + 4.8e-7*Math.cos(2*Lprime) - 4.4e-7*Math.cos(2*omega);
     }
     else {return obNutation(mf.jCentury(date));}
 }
 
-/** Nutation in longitude in degrees 
+/** Nutation in longitude in radians 
  * @param date The timestamp.
  * @param unix If true, date is measured in Unix milliseconds. If false, date is Julian centuries since J2000 epoch.
 */
 export function longNutation(date: number, unix = false) {
     if (!unix) {
-        const L = mf.mod(280.4665 + 36000.7698*date, 360)*degToRad;
-        const Lprime = mf.mod(218.3165 + 481267.8813*date, 360)*degToRad;
-        const omega = mf.mod(125.04452 - 1934.136261*date + 0.0020708*date**2 + date**3/450000, 360)*degToRad;
-        return (-17.2*Math.sin(omega) - 1.32*Math.sin(2*L) - 0.23*Math.sin(2*Lprime) + 0.21*Math.sin(2*omega)) / 3600;
+        const L = mf.mod(4.895064 + 628.3319663*date, TAU);
+        const Lprime = mf.mod(3.810342 + 8399.709113*date, TAU);
+        const omega = mf.polymod(date, [2.1824386, -33.75704594, 3.61423e-5, 3.87851e-8], TAU);
+        return -8.34e-5*Math.sin(omega) - 6.40e-6*Math.sin(2*L) - 1.12e-6*Math.sin(2*Lprime) + 1.02e-6*Math.sin(2*omega);
     }
     else {return longNutation(mf.jCentury(date));}
 }
 
 /**
- * Returns the obliquity of the ecliptic, or equivalently Earth's axial tilt.
+ * Returns the obliquity of the ecliptic, or equivalently Earth's axial tilt, in radians.
  * @param date The timestamp.
  * @param unix If true, date is measured in Unix milliseconds. If false, date is Julian centuries since J2000 epoch.
  */
 export function obliquity(date: number, unix = false): number {
     if (!unix) {
-        const meanObliquity = 23.4392911 + (-46.815*date - 5.9e-4*date**2 + 1.813e-3*date**3) / 3600;
+        const meanObliquity = mf.polynomial(date, [0.409092804, -2.26966e-4, -2.8604e-9, 8.7897e-9]);
         return meanObliquity + obNutation(date);
     }
     else {return obliquity(mf.jCentury(date));}
 }
 
 /**
- * Calculates the sun's right ascension in degrees. To convert to hours, divide by 15.
+ * Calculates the sun's right ascension in radians. To convert to hours, multiply by (24/TAU).
  * @param date The timestamp.
  * @param unix If true, date is measured in Unix milliseconds. If false, date is Julian centuries since J2000 epoch.
  */
 export function sunRA(date: number, unix = false): number {
     if (!unix) {
-        const long = sunTrueLong(date) * degToRad;
-        const ob = obliquity(date) * degToRad;
+        const long = sunTrueLong(date);
+        const ob = obliquity(date);
         const ra = Math.atan2(Math.sin(long)*Math.cos(ob), Math.cos(long));
-        return mf.mod(ra / degToRad, 360);
+        return mf.mod(ra, TAU);
     }
     else {return sunRA(mf.jCentury(date));}
 }
 
 /**
- * Equation of time in minutes (apparent solar time - mean solar time). Based on equation 27.1 in Astronomical Algorithms.
+ * Equation of time in radians. To convert to minutes, multiply by (1440 / TAU).
  * @param date The timestamp.
  * @param unix If true, date is measured in Unix milliseconds. If false, date is Julian centuries since J2000 epoch.
  */
 export function equationOfTime(date: number, unix = false): number { 
     if (!unix) {
-        const eot = sunMeanLong(date) - 0.0057183 - sunRA(date) + longNutation(date) * Math.cos(obliquity(date)*degToRad); // in degrees
-        return mf.mod(4 * eot + 720, 1440) - 720; // reduce to range [-720, 720] if absolute value too large
+        const eot = sunMeanLong(date) - 9.98032e-5 - sunRA(date) + longNutation(date) * Math.cos(obliquity(date));
+        return mf.mod(eot + TAU/2, TAU) - TAU/2; // reduce to range [-tau/2, tau/2)
     }
     else {return equationOfTime(mf.jCentury(date));}
 }
 
-/** Gives the value of Greenwich apparent sidereal time (GAST) in degrees, from equation 11.4 in Astronomical Algorithms.
- * The value returned is in the range 0 <= x < 360.
+/** Gives the value of Greenwich apparent sidereal time (GAST) in radians, from equation 11.4 in Astronomical Algorithms.
+ * The value returned is in the range 0 <= x < TAU.
  * @param unix Unix timestamp in milliseconds.
  */
 export function gast(unix: number): number {
     const JD = mf.jdUTC(unix); // Julian day but using UTC (approximation to UT1) rather than TT
     const JC = (JD - 2451545) / 36525; // Julian century, but with UTC rather than TT
-    const gmst = 280.46061837 + 360.98564736629*(JD-2451545) + 3.87933e-4*JC**2 - JC**3/38710000;
-    const correction = longNutation(unix, true) * Math.cos(obliquity(unix, true) * degToRad);
-    return mf.mod(gmst + correction, 360);
+    const gmst = mf.polynomial(JC, [4.8949612127, 230121.67531543, 6.77071e-6, -4.50873e-10]);
+    const correction = longNutation(unix, true) * Math.cos(obliquity(unix, true));
+    return mf.mod(gmst + correction, TAU);
 }
 
 /**
- * Returns apparent solar time given longitude and time, in minutes after solar midnight. 0 is solar midnight, 720 is solar noon.
- * @param longitude Longitude in degrees.
+ * Returns the sun's hour angle in radians, or the observer's longitude minus the longitude of the subsolar point. A value
+ * of ±TAU/2 indicates solar midnight and 0 indicates solar noon. To convert to apparent solar time in hours, multiply by 
+ * (24/TAU) and add 12.
+ * @param long Observer's longitude in radians.
  * @param unix Unix timestamp in milliseconds.
  */
-export function solarTime(longitude: number, unix: number): number {
+export function sunHourAngle(long: number, unix: number): number {
     const timeEq = equationOfTime(unix, true);
-    const mst = unix / 60000 + longitude * 4; // mean solar time in minutes
-    const ast = mf.mod(timeEq + mst, 1440); // apparent solar time
+    const mst = TAU * (unix + DAY_LENGTH/2) / DAY_LENGTH + long;
+    const ast = mf.mod(timeEq + mst + TAU/2, TAU) - TAU/2; // apparent solar time
     return ast;
 }
 
 /**
- * Returns the sun's declination in degrees. This is the latitude of the subsolar point.
- * @param longitude Sun's true ecliptic longitude, in degrees
+ * Returns the sun's declination in radians. This is the latitude of the subsolar point.
+ * @param long Sun's true ecliptic longitude, in radians
  * @param obliquity Obliquity of the ecliptic (i.e. Earth's axial tilt)
  */
-export function declination(longitude: number, obliquity: number): number {
-    return Math.asin(Math.sin(obliquity*degToRad)*Math.sin(longitude*degToRad)) / degToRad;
+export function declination(long: number, obliquity: number): number {
+    return Math.asin(Math.sin(obliquity)*Math.sin(long));
 }
 
 /**
  * Returns the subsolar point, or location on Earth at which the sun is directly overhead.
  * @param date Longitude, obliquity, distance (LOD) profile for the given moment.
- * @returns [latitude, longitude] of subsolar point
+ * @returns [latitude, longitude] of subsolar point in radians. For degrees, use subsolarPointDeg
  */
 export function subsolarPoint(lod?: LODProfile): number[] {
     if (lod === undefined) {lod = generateLODProfile(Date.now());}
     const subsolarLat = declination(lod.longitude, lod.obliquity);
-    const soltime0 = solarTime(0, lod.unix); // solar time at Greenwich meridian (longitude 0)
-    const subsolarLong = mf.mod(-soltime0/4, 360) - 180;
+    const subsolarLong = -sunHourAngle(0, lod.unix);
     return [subsolarLat, subsolarLong];
+}
+
+/** Returns subsolar point, but in degrees rather than radians. */
+export function subsolarPointDeg(lod?: LODProfile): number[] {
+    const [latR, longR] = subsolarPoint(lod);
+    return [mf.clamp(latR / degToRad, -90, 90), mf.mod(longR / degToRad + 180, 360) - 180];
 }
 
 /** Returns the sun's ECEF coordinates, in kilometers, at the given Unix timestamp in milliseconds. */
@@ -232,97 +245,55 @@ export function sunEcef(unix: number): number[] {
 
 /**
  * Returns sun position given latitude, longitude, and DateTime.
- * @param lat Latitude in degrees
- * @param long Longitude in degrees
+ * @param lat Latitude in radians
+ * @param long Longitude in radians
  * @param lod Longitude, obliquity, distance (LOD) profile.
- * @returns Array: [elevation, azimuth]. Elevation is in degrees above horizon, azimuth is degrees clockwise from north
+ * @returns Array: [elevation, azimuth]. Elevation is in radians above horizon, azimuth is radians clockwise from north
  * Solar elevation is not refracted. To find the solar elevation angle adjusted for atmospheric refraction, use mf.refract(sunPosition[0])
  */
 export function sunPosition(lat: number, long: number, lod: LODProfile): number[] {
     const [sunLat, sunLong] = subsolarPoint(lod);
     const sunEcef = mf.toEcef(sunLat, sunLong, lod.distance);
-    /* Note: Geodetic latitude of subsolar point is the same as geocentric latitude at which the sun-Earth center line intersects 
-    the ellipsoid. Subsolar point is where the surface normal intersects the sun. */
     return mf.elevAzimuth(lat, long, mf.latLongEcef(lat, long), sunEcef);
 }
 
 /**
  * Returns the time(s) of solar noon, along with the sun's position at solar noon.
- * @param latitude Latitude in degrees.
- * @param longitude Longitude in degrees.
+ * @param lat Latitude in radians.
+ * @param long Longitude in radians.
  * @param start Start (as LOD profile)
  * @param end End (as LOD profile)
  * @returns Time(s) of solar noon, along with the sun's position at solar noon.
  */
 export function solarNoon(lat: number, long: number, start: LODProfile, end: LODProfile): SEvent[] {
-    const startT = start.unix, endT = end.unix;
-    const st00 = solarTime(long, startT), st24 = solarTime(long, endT);
-    const stDiff = mf.mod(st24 - st00 - 720, 1440) + 720;
-    const solarTimeRate = stDiff / (endT - startT); // rate of solar time change relative to actual time
-    if (st00 > 600 && st00 <= 720 && st24 > 720 && st24 < 840) { // 2 solar noons in a day
-        let solarNoon0 = startT + (720 - st00) / solarTimeRate;
-        solarNoon0 += ((720 - solarTime(long, solarNoon0)) * 60000); // refine to 1 ms precision
-        solarNoon0 = Math.floor(mf.clamp(solarNoon0, startT, endT-1));
-        const [e0, a0] = sunPosition(lat, long, estimateLOD(solarNoon0,start,end)); // solar elevation/azimuth at solarNoon0
-
-        let solarNoon1 = endT - 60000 * (st24 - 720) / solarTimeRate;
-        solarNoon1 += ((720 - solarTime(long, solarNoon1)) * 60000);
-        solarNoon1 = Math.floor(mf.clamp(solarNoon1, startT, endT-1));
-        const [e1, a1] = sunPosition(lat, long, estimateLOD(solarNoon1,start,end)); // solar elevation/azimuth at solarNoon1
-        return [{unix:solarNoon0,type:"Solar Noon",elev:e0,azimuth:a0},{unix:solarNoon1,type:"Solar Noon",elev:e1,azimuth:a1}];
+    const solarNoonTimes = mf.meridianPassings(long, start.unix, end.unix, 0, sunHourAngle);
+    const events: SEvent[] = [];
+    for (const time of solarNoonTimes) {
+        const [e, a] = sunPosition(lat, long, estimateLOD(time, start, end));
+        events.push({unix: time, type: "Solar Noon", elev: e, azimuth: a});
     }
-    else if (st00 > 720 && st00 < 840 && st24 > 600 && st24 <= 720) { // 0 solar noons in a day
-        return [];
-    }
-    else { // 1 solar noon in a day
-        let solarNoon = startT + mf.mod(720 - st00, 1440) / solarTimeRate;
-        solarNoon += ((720 - solarTime(long, solarNoon)) * 60000);
-        solarNoon = Math.floor(mf.clamp(solarNoon, startT, endT-1));
-        const [e, a] = sunPosition(lat, long, estimateLOD(solarNoon,start,end));
-        return [{unix: solarNoon, type: "Solar Noon", elev: e, azimuth: a}];
-    }
+    return events;
 }
 
 /**
  * Returns the time(s) of solar midnight, along with the sun's position at solar midnight.
- * @param latitude Latitude in degrees.
- * @param longitude Longitude in degrees.
+ * @param lat Latitude in radians.
+ * @param long Longitude in radians.
  * @param start Start (as LOD profile)
  * @param end End (as LOD profile)
  * @returns Time(s) of solar midnight, along with the sun's position at solar midnight.
  */
 export function solarMidnight(lat: number, long: number, start: LODProfile, end: LODProfile): SEvent[] {
-    const startT = start.unix, endT = end.unix;
-    const st00 = solarTime(long, startT), st24 = solarTime(long, endT);
-    const stDiff = mf.mod(st24 - st00 - 720, 1440) + 720;
-    const solarTimeRate = stDiff / (endT - startT); // rate of solar time change relative to actual time
-
-    if (st00 > 1320 && st24 < 120) { // 2 solar midnights in a day
-        let solarMidnight0 = startT + (1440 - st00) / solarTimeRate;
-        solarMidnight0 += ((720-mf.mod(solarTime(long,solarMidnight0)+720,1440))*60000);
-        solarMidnight0 = Math.floor(mf.clamp(solarMidnight0, startT, endT-1));
-        const [e0, a0] = sunPosition(lat, long, estimateLOD(solarMidnight0,start,end)); // solar elevation/azimuth at solarMidnight0
-
-        let solarMidnight1 = endT - st24 / solarTimeRate;
-        solarMidnight1 += ((720-mf.mod(solarTime(long,solarMidnight1)+720,1440))*60000);
-        solarMidnight1 = Math.floor(mf.clamp(solarMidnight1, startT, endT-1));
-        const [e1, a1] = sunPosition(lat, long, estimateLOD(solarMidnight1,start,end)); // solar elevation/azimuth at solarMidnight1
-        return [{unix: solarMidnight0, type: "Solar Midnight", elev: e0, azimuth: a0},
-            {unix: solarMidnight1, type: "Solar Midnight", elev: e1, azimuth: a1}];
+    const solarMidnightTimes = mf.meridianPassings(long, start.unix, end.unix, TAU/2, sunHourAngle);
+    const events: SEvent[] = [];
+    for (const time of solarMidnightTimes) {
+        const [e, a] = sunPosition(lat, long, estimateLOD(time, start, end));
+        events.push({unix: time, type: "Solar Midnight", elev: e, azimuth: a});
     }
-    else if (st00 < 120 && st24 > 1320) { // 0 solar midnights in a day
-        return [];
-    }
-    else { // 1 solar midnight in a day
-        let solarMidnight = endT - st24 / solarTimeRate;
-        solarMidnight += ((720-mf.mod(solarTime(long,solarMidnight)+720,1440))*60000);
-        solarMidnight = Math.floor(mf.clamp(solarMidnight, startT, endT-1));
-        const [e, a] = sunPosition(lat, long, estimateLOD(solarMidnight,start,end));
-        return [{unix: solarMidnight, type: "Solar Midnight", elev: e, azimuth: a}];
-    }
+    return events;
 }
 
-/** Returns the approximate derivative of the solar elevation angle at a particular time, in degrees per second. */
+/** Returns the approximate derivative of the solar elevation angle at a particular time, in radians per second. */
 export function derivative(lat: number, long: number, unix: number, startLOD: LODProfile, endLOD: LODProfile) {
     const t0 = unix - 500, t1 = unix + 500;
     const LOD0 = estimateLOD(t0, startLOD, endLOD), LOD1 = estimateLOD(t1, startLOD, endLOD);
@@ -332,8 +303,8 @@ export function derivative(lat: number, long: number, unix: number, startLOD: LO
 /**
  * Returns an array of Unix times, representing the start of the current day, the times at which the derivative of solar
  * elevation angle is 0, and the start of the next day. This is a helper function for "dawn" and "dusk" functions below.
- * @param lat Latitude in degrees
- * @param long Longitude in degrees
+ * @param lat Latitude in radians
+ * @param long Longitude in radians
  * @param start Start of day (LOD profile)
  * @param end End of day (LOD profile)
  * @returns Unix timestamps at which sun reaches relative min or max altitude, along with both the start and end of the day.
@@ -363,11 +334,10 @@ export function maxAndMin(lat: number, long: number, start: LODProfile, end: LOD
 }
 
 /**
- * Calculates the time in the morning at which the sun's elevation reaches the specified angle. Angle should be -5/6 for sunrise,
- * -6 for civil twilight, -12 for nautical twilight, and -18 for astronomical twilight.
- * @param lat Latitude in degrees
- * @param long Longitude in degrees
- * @param angle Solar elevation angle in degrees
+ * Calculates the time in the morning at which the sun's elevation reaches the specified angle in radians.
+ * @param lat Latitude in radians
+ * @param long Longitude in radians
+ * @param angle Solar elevation angle in radians
  * @param type "Sunrise", "Civil Dawn", "Nautical Dawn" or "Astro Dawn"
  * @param maxMin Results of maxAndMin() for given day
  * @param startLOD LOD profile for beginning of day
@@ -381,8 +351,7 @@ export function dawn(lat: number, long: number, angle: number, type: string, max
     for (let i=0; i<maxMin.length-1; i++) {
         let t0 = maxMin[i], t1 = maxMin[i+1];
         const lod0 = estimateLOD(t0, startLOD, endLOD), lod1 = estimateLOD(t1, startLOD, endLOD);
-        let e0 = sunPosition(lat, long, lod0)[0];
-        let e1 = sunPosition(lat, long, lod1)[0];
+        let e0 = sunPosition(lat, long, lod0)[0], e1 = sunPosition(lat, long, lod1)[0];
         if (e0 <= angle && e1 >= angle) {
             while (t1 - t0 > BSEARCH_GAP) {
                 const avgLOD = estimateLOD((t0+t1)/2, startLOD, endLOD);
@@ -403,9 +372,9 @@ export function dawn(lat: number, long: number, angle: number, type: string, max
 /**
  * Calculates the time in the evening at which the sun's elevation reaches the specified angle. Angle should be -5/6 for sunset,
  * -6 for civil twilight, -12 for nautical twilight, and -18 for astronomical twilight.
- * @param lat Latitude in degrees
- * @param long Longitude in degrees
- * @param angle Solar elevation angle in degrees
+ * @param lat Latitude in radians
+ * @param long Longitude in radians
+ * @param angle Solar elevation angle in radians
  * @param type "Sunset", "Civil Dusk", "Nautical Dusk", "Astro Dusk"
  * @param maxMin Results of maxAndMin() for given day
  * @returns SEvent object, which includes a DateTime, the sun's elevation & azimuth and a tag for the type of dusk/sunset.
@@ -417,8 +386,7 @@ export function dusk(lat: number, long: number, angle: number, type: string, max
     for (let i=0; i<maxMin.length-1; i++) {
         let t0 = maxMin[i], t1 = maxMin[i+1];
         const lod0 = estimateLOD(t0, startLOD, endLOD), lod1 = estimateLOD(t1, startLOD, endLOD);
-        let e0 = sunPosition(lat, long, lod0)[0];
-        let e1 = sunPosition(lat, long, lod1)[0];
+        let e0 = sunPosition(lat, long, lod0)[0], e1 = sunPosition(lat, long, lod1)[0];
         if (e0 >= angle && e1 <= angle) {
             while (t1 - t0 > BSEARCH_GAP) {
                 const avgLOD = estimateLOD((t0+t1)/2, startLOD, endLOD);
@@ -437,28 +405,28 @@ export function dusk(lat: number, long: number, angle: number, type: string, max
 }
 
 export function sunrise(lat: number, long: number, maxMin: number[], startLOD: LODProfile, endLOD: LODProfile) {
-    return dawn(lat, long, -5/6, "Sunrise", maxMin, startLOD, endLOD);
+    return dawn(lat, long, HORIZON, "Sunrise", maxMin, startLOD, endLOD);
 } 
 export function sunset(lat: number, long: number, maxMin: number[], startLOD: LODProfile, endLOD: LODProfile) {
-    return dusk(lat, long, -5/6, "Sunset", maxMin, startLOD, endLOD);
+    return dusk(lat, long, HORIZON, "Sunset", maxMin, startLOD, endLOD);
 }
 export function civilDawn(lat: number, long: number, maxMin: number[], startLOD: LODProfile, endLOD: LODProfile) {
-    return dawn(lat, long, -6, "Civil Dawn", maxMin, startLOD, endLOD);
+    return dawn(lat, long, CIVIL_TWILIGHT, "Civil Dawn", maxMin, startLOD, endLOD);
 }
 export function civilDusk(lat: number, long: number, maxMin: number[], startLOD: LODProfile, endLOD: LODProfile) {
-    return dusk(lat, long, -6, "Civil Dusk", maxMin, startLOD, endLOD);
+    return dusk(lat, long, CIVIL_TWILIGHT, "Civil Dusk", maxMin, startLOD, endLOD);
 }
 export function nauticalDawn(lat: number, long: number, maxMin: number[], startLOD: LODProfile, endLOD: LODProfile) {
-    return dawn(lat, long, -12, "Nautical Dawn", maxMin, startLOD, endLOD);
+    return dawn(lat, long, NAUTICAL_TWILIGHT, "Nautical Dawn", maxMin, startLOD, endLOD);
 }
 export function nauticalDusk(lat: number, long: number, maxMin: number[], startLOD: LODProfile, endLOD: LODProfile) {
-    return dusk(lat, long, -12, "Nautical Dusk", maxMin, startLOD, endLOD);
+    return dusk(lat, long, NAUTICAL_TWILIGHT, "Nautical Dusk", maxMin, startLOD, endLOD);
 }
 export function astroDawn(lat: number, long: number, maxMin: number[], startLOD: LODProfile, endLOD: LODProfile) {
-    return dawn(lat, long, -18, "Astro Dawn", maxMin, startLOD, endLOD);
+    return dawn(lat, long, ASTRO_TWILIGHT, "Astro Dawn", maxMin, startLOD, endLOD);
 }
 export function astroDusk(lat: number, long: number, maxMin: number[], startLOD: LODProfile, endLOD: LODProfile) {
-    return dusk(lat, long, -18, "Astro Dusk", maxMin, startLOD, endLOD);
+    return dusk(lat, long, ASTRO_TWILIGHT, "Astro Dusk", maxMin, startLOD, endLOD);
 }
 
 /**
@@ -476,7 +444,7 @@ export function dayLength(dayStart: number, sunEventsYesterday: SEvent[], sunEve
         else if (event.type === "Sunset") {set.push(event);}
     }
     if (rise.length === 0 && set.length === 0) {
-        return (sunEventsToday.length === 0 || sunEventsToday[0].elev >= -5/6) ? DAY_LENGTH : 0;
+        return (sunEventsToday.length === 0 || sunEventsToday[0].elev >= HORIZON) ? DAY_LENGTH : 0;
     }
     else if (rise.length >= 1 && set.length >= 1 && set.at(-1)!.unix > rise[0].unix) {return set.at(-1)!.unix - rise[0].unix;}
     else {
@@ -490,6 +458,7 @@ export function dayLength(dayStart: number, sunEventsYesterday: SEvent[], sunEve
     }
 }
 
+/** Generate sun events for a given day. Latitude and longitude are in radians. */
 export function allSunEvents(lat: number, long: number, start: LODProfile, end: LODProfile): SEvent[] {
     const maxMin = maxAndMin(lat, long, start, end);
     const midnight = solarMidnight(lat, long, start, end);
@@ -508,58 +477,53 @@ export function allSunEvents(lat: number, long: number, start: LODProfile, end: 
 }
 
 /** Given a date, returns an array with sunrise, sunset, dawn, dusk, solar noon, and solar midnight times for the given date. 
- * @param lat Latitude of observer
- * @param long Longitude of observer
+ * Intended for use for a single day only (for example with the sun.ts script). All other uses, including website uses, should
+ * use generateSunTable() instead!
+ * @param lat Latitude of observer, degrees
+ * @param long Longitude of observer, degrees
  * @param date Luxon DateTime (can be any point within the given day)
 */
 export function sunEventsDay(lat: number, long: number, date: DateTime): SEvent[] {
     const start = generateLODProfile(mf.ms(date.startOf("day")));
     const end = generateLODProfile(mf.ms(date.plus({days:1}).startOf("day")));
-    return allSunEvents(lat, long, start, end);
+    return allSunEvents(lat * degToRad, long * degToRad, start, end);
 }
 
 /** Calculates the Unix millisecond timestamp of the solstice or equinox in the given month and year.
- * Month must be 3, 6, 9 or 12.
- */
+ * Month must be 3, 6, 9 or 12. */
 export function calcSolstEq(year: number, month: 3 | 6 | 9 | 12) {
-    let t0 = (year - 1970) * 31556952000 + (month - 1) * 2629746000;
+    let t0 = (year + (month - 1) / 12 - 1970) * 31556952000;
     let t1 = t0 + 2629746000; // approx. 1 month after start
-    let l0 = sunTrueLong(t0, true);
-    let l1 = sunTrueLong(t1, true);
-    if (l0 > l1) {l0 -= 360;}
-    const thresh = (month - 3) * 30;
+    let l0 = sunTrueLong(t0, true), l1 = sunTrueLong(t1, true);
+    if (l0 > l1) {l0 -= TAU;}
+    const thresh = (month - 3) * TAU/12;
     while (t1 - t0 > 9e5) { // 15 minutes
         const tAvg = (t0 + t1) / 2;
         let lAvg = sunTrueLong(tAvg, true);
-        if (lAvg >= l1) {lAvg -= 360;}
+        if (lAvg >= l1) {lAvg -= TAU;}
         if (lAvg <= thresh) {t0 = tAvg; l0 = lAvg;}
         else {t1 = tAvg; l1 = lAvg;}
     }
-    // linear interpolation within 2.5 to 5 minute window
-    const frac = (thresh - l0) / (l1 - l0);
+    const frac = (thresh - l0) / (l1 - l0); // linearly interpolate within 7.5-15 minute window
     const t = Math.floor(t0 + frac * (t1 - t0));
     return t;
 }
 
 /** Calculates the sun's apsides (aphelion and perihelion) for a particular year bounded by start and end Unix timestamps.
- * Aphelion is when the earth is furthest from the sun, and perihelion is when it is closest.
- */
+ * Aphelion is when the earth is furthest from the sun, and perihelion is when it is closest. */
 export function sunApsides(start: number, end: number) {
     const interval = (end - start) / 12;
-    const delta = 6e5; // 10 minutes
     const window = 3.6e6; // 1 hour
     const aphelion: number[] = [];
     const perihelion: number[] = [];
     for (let t = start; t < end; t += interval) {
-        let t0 = t;
-        let t1 = Math.min(t + interval, end);
-        let d0 = sunDistance(t0+delta, true) - sunDistance(t0-delta, true);
-        let d1 = sunDistance(t1+delta, true) - sunDistance(t1-delta, true);
+        let t0 = t, t1 = Math.min(t + interval, end);
+        let d0 = sunDistanceDerivative(t0), d1 = sunDistanceDerivative(t1);
         if (d0 === 0) {((d1 > 0) ? perihelion : aphelion).push(t0);}
         else if (d0 * d1 < 0) {
             while (t1 - t0 > window) {
                 const tAvg = (t0 + t1) / 2;
-                const dAvg = sunDistance(tAvg+delta, true) - sunDistance(tAvg-delta, true);
+                const dAvg = sunDistanceDerivative(tAvg);
                 if (d1 * dAvg <= 0) {t0 = tAvg; d0 = dAvg;}
                 else {t1 = tAvg; d1 = dAvg;}
             }
@@ -588,10 +552,10 @@ export function intervals(sunEvents: SEvent[], timeZone: TimeChange[]) {
 
     if (newSunEvents.length === 0) { // no sunrise, sunset, dawn, or dusk
         const sunAngle = sunEvents[0].elev;
-        if (sunAngle < -18) {return [[], [], [], [], [[0, DAY_LENGTH]]];}
-        else if (sunAngle < -12) {return [[], [], [], [[0, DAY_LENGTH]], []];}
-        else if (sunAngle < -6) {return [[], [], [[0, DAY_LENGTH]], [], []];}
-        else if (sunAngle < -5/6) {return [[], [[0, DAY_LENGTH]], [], [], []];}
+        if (sunAngle < ASTRO_TWILIGHT) {return [[], [], [], [], [[0, DAY_LENGTH]]];}
+        else if (sunAngle < NAUTICAL_TWILIGHT) {return [[], [], [], [[0, DAY_LENGTH]], []];}
+        else if (sunAngle < CIVIL_TWILIGHT) {return [[], [], [[0, DAY_LENGTH]], [], []];}
+        else if (sunAngle < HORIZON) {return [[], [[0, DAY_LENGTH]], [], [], []];}
         else {return [[[0, DAY_LENGTH]], [], [], [], []];}
     }
     
@@ -619,7 +583,6 @@ export function intervals(sunEvents: SEvent[], timeZone: TimeChange[]) {
     else if (etype === "Nautical Dawn" || etype === "Civil Dusk") {ints[2].push([lastTime, DAY_LENGTH]);}
     else if (etype === "Astro Dawn" || etype === "Nautical Dusk") {ints[3].push([lastTime, DAY_LENGTH]);}
     else if (etype === "Astro Dusk") {ints[4].push([lastTime, DAY_LENGTH]);}
-
     return ints;
 }
 
@@ -646,10 +609,10 @@ export function intervalsSvg(sunEvents: SEvent[], timeZone: TimeChange[]): numbe
 
     if (newSunEvents.length === 0) { // no sunrise, sunset, dawn, or dusk
         const s = sunEvents[0].elev;
-        if (s < -18) {return [[], [], [], []];}
-        else if (s < -12) {return [[], [], [], [[0, 86400]]];}
-        else if (s < -6) {return [[], [], [[0, 86400]], [[0, 86400]]];}
-        else if (s < -5/6) {return [[], [[0, 86400]], [[0, 86400]], [[0, 86400]]];}
+        if (s < ASTRO_TWILIGHT) {return [[], [], [], []];}
+        else if (s < NAUTICAL_TWILIGHT) {return [[], [], [], [[0, 86400]]];}
+        else if (s < CIVIL_TWILIGHT) {return [[], [], [[0, 86400]], [[0, 86400]]];}
+        else if (s < HORIZON) {return [[], [[0, 86400]], [[0, 86400]], [[0, 86400]]];}
         else {return [[[0, 86400]], [[0, 86400]], [[0, 86400]], [[0, 86400]]];}
     }
 
@@ -704,7 +667,6 @@ export function intervalsSvg(sunEvents: SEvent[], timeZone: TimeChange[]): numbe
         else if (etype === "Nautical Dusk") {nIntervals[nIntervals.length-1][1] = s;}
         else if (etype === "Astro Dusk") {aIntervals[aIntervals.length-1][1] = s;}
     }
-
     return [dIntervals, cIntervals, nIntervals, aIntervals];
 }
 
@@ -715,8 +677,8 @@ export function intervalsNightCivilTwilight(sunEvents: SEvent[], timeZone: TimeC
     }
     if (newSunEvents.length === 0) {
         const s = sunEvents[0].elev;
-        if (s < -6) {return [[[0, 86400]], []];}
-        else if (s < -5/6) {return [[], [[0, 86400]]];}
+        if (s < CIVIL_TWILIGHT) {return [[[0, 86400]], []];}
+        else if (s < HORIZON) {return [[], [[0, 86400]]];}
         else {return [[], []];}
     }
 
@@ -780,10 +742,10 @@ export function lengths(sunEvents: SEvent[], timeZone: TimeChange[]): number[] {
 
     if (newSunEvents.length === 0) { // no sunrise, sunset, dawn, or dusk
         const s = sunEvents[0].elev;
-        if (s < -18) {return [0, 0, 0, 0];} // night all day
-        else if (s < -12) {return [0, 0, 0, 86400];} // astronomical twilight all day
-        else if (s < -6) {return [0, 0, 86400, 86400];} // nautical twilight all day
-        else if (s < -5/6) {return [0, 86400, 86400, 86400];} // civil twilight all day
+        if (s < ASTRO_TWILIGHT) {return [0, 0, 0, 0];} // night all day
+        else if (s < NAUTICAL_TWILIGHT) {return [0, 0, 0, 86400];} // astronomical twilight all day
+        else if (s < CIVIL_TWILIGHT) {return [0, 0, 86400, 86400];} // nautical twilight all day
+        else if (s < HORIZON) {return [0, 86400, 86400, 86400];} // civil twilight all day
         else {return [86400, 86400, 86400, 86400];} // daylight all day
     }
 
@@ -818,8 +780,11 @@ export function lengths(sunEvents: SEvent[], timeZone: TimeChange[]): number[] {
 /** Generate an object containing sunrise, sunset, twilight, solar noon and solar midnight times, day lengths,
  * solstices and equinoxes (grouped under "solstices"), perihelion, aphelion, and the time zone lookup table for
  * the given zone in the given year.
+ * Note that latitude and longitude are given in degrees here, not radians, because they are treated as geographic coordinates
+ * rather than angles.
  */
 export function generateSunTable(lat: number, long: number, year: number, zone: string): SunTable {
+    lat *= degToRad; long *= degToRad;
     const yearStart = DateTime.fromObject({year: year}, {zone: zone});
     const yearEnd = DateTime.fromObject({year: year + 1}, {zone: zone});
 
