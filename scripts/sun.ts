@@ -49,7 +49,7 @@ if (Math.abs(lat) >= 90) {console.log("Latitude must be between -90 and 90, excl
 else if (Math.abs(long) > 180) {console.log("Longitude must be between -180 and 180");}
 else {
     const lod = generateLODProfile(mf.ms(date));
-    const subsolarPoint = sc.subsolarPointDeg(lod);
+    const subsolarPoint = sc.subsolarPoint(lod, true);
     let [elev, az] = sc.sunPosition(lat * degToRad, long * degToRad, lod);
     let apparentElev = mf.refract(elev);
     const dist = lod.distance;

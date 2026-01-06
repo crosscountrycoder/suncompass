@@ -95,35 +95,36 @@ export function direction(bearing: number) {
 }
 
 /**
- * Calculates one of the roots of a quadratic function, given two points on the quadratic curve and the derivative at one point.
+ * Calculates one of the roots of a quadratic function, given three points on the curve.
  * @param x0 Initial x-coordinate
- * @param x1 Final x-coordinate (x1 > x0)
- * @param y0 Value of y at x=x0
- * @param y1 Value of y at x=x1
- * @param d0 Value of dy/dx at x=x0
- * @returns The root of the quadratic function between x0 and x1. Note that y0 and y1 should have opposite signs, and there
- * should be exactly one real root between x0 and x1.
+ * @param y0 y-coordinate at x0
+ * @param x1 Middle x-coordinate (x1 > x0)
+ * @param y1 y-coordinate at x1
+ * @param x2 Final x-coordinate (x2 > x1)
+ * @param y2 y-coordinate at x2
+ * @returns The root of the quadratic function between x0 and x2. If it is undefined, returns (x0 + x2) / 2 as a placeholder. 
+ * If there are two roots, it returns the root which is closer to the center of the range. For SunCompass, there should always 
+ * be one solution in the range.
  */
-export function quadraticZero(x0: number, x1: number, y0: number, y1: number, d0: number) {
-    const dx = x1 - x0;
-    // y = a*u**2 + b*u + c where u = x-x0
-    const a = (y1 - y0 - d0 * dx) / (dx ** 2);
-    const b = d0;
+export function quadraticZero(x0: number, y0: number, x1: number, y1: number, x2: number, y2: number): number {
+    const u1 = (x1 - x0) / (x2 - x0); // normalize to [0, 1] for numerical stability, u0 = 0 and u2 = 1
+    // y = a*u^2 + b*u + c where u = (x - x0) / (x2 - x0)
+    const a = y0/u1 - y1/(u1*(1-u1)) + y2/(1-u1);
+    const b = -y0*(u1+1)/u1 + y1/(u1*(1-u1)) - y2*u1/(1-u1);
     const c = y0;
-    const d1 = 2*a*dx + b; // dy/dx at x=x1
-
-    if (y0 === y1) { // constant (y0 = y1 = 0)
-        return x0;
+    if (Math.abs(2 * a / b) < 1e-4) { // if almost linear
+        if (y0 === y2) {return (x0 + x2) / 2;} // placeholder when undefined
+        else {return x0 + (y0 / (y0 - y2)) * (x2 - x0);}
     }
-    else if (Math.abs(Math.abs(d1 / d0) - 1) <= 1e-6) { // linear
-        const frac = y0 / (y0 - y1);
-        return clamp(x0 + frac * (x1 - x0), x0, x1);
-    }
-    else { // quadratic
-        const disc = Math.max(0, b**2 - 4*a*c);
-        const sign = (y1 > y0) ? 1 : -1;
-        const u = (sign * Math.sqrt(disc) - b) / (2 * a);
-        return clamp(x0 + u, x0, x1);
+    else {
+        const disc = b**2 - 4*a*c;
+        if (disc < 0) {return (x0 + x2) / 2;} // placeholder when undefined
+        else {
+            const sol1 = (Math.sqrt(disc) - b) / (2 * a);
+            const sol2 = (-Math.sqrt(disc) - b) / (2 * a);
+            const solution = (Math.abs(sol1 - 0.5) <= Math.abs(sol2 - 0.5)) ? sol1 : sol2;
+            return x0 + solution * (x2 - x0);
+        }
     }
 }
 

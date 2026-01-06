@@ -1,20 +1,20 @@
 /* 
-The formulas for eccentricity, earth-sun distance, axial tilt, declination, equation of time, and atmospheric refraction of sunlight 
-are borrowed from the book "Astronomical Algorithms" by Jean Meeus. The refraction formula is modified slightly to ensure continuity 
+The formulas for earth-sun distance, axial tilt, declination, equation of time, and atmospheric refraction of sunlight are 
+borrowed from the book "Astronomical Algorithms" by Jean Meeus. The refraction formula is modified slightly to ensure continuity 
 when the sun is below the horizon. The formula for solar ecliptic longitude is from the book "Planetary Programs and Tables from 
 -4000 to +2800" by Pierre Bretagnon and Jean-Louis Simon.
 
-The subsolar point is calculated using the declination and equation of time, treating UTC as equivalent to UT1 (mean solar time at 0
-degrees longitude), the two are always within 0.9 seconds of each other. Solar noon and midnight are calculated using the equation of 
-time. The position of the sun is calculated from the subsolar point through spherical trigonometry.
+The subsolar point is calculated using the declination and equation of time, treating UTC as equivalent to UT1 (mean solar time 
+at 0 degrees longitude), the two are always within 0.9 seconds of each other. Solar noon and midnight are calculated using the 
+equation of time. The position of the sun is calculated from the subsolar point through spherical trigonometry.
 
 For the purposes of this calculator, daytime is defined as the period in which the solar elevation angle is greater than -50 
-arcminutes, or -5/6 of a degree. This accounts for the sun's angular radius in the sky and refraction of sunlight. It corresponds to 
-the definition used by most sources, including NOAA's solar calculator.
+arcminutes (-5/6 degrees, or -0.1454 radians). This accounts for the sun's angular radius in the sky and refraction of sunlight.
+It corresponds to the definition used by most sources, including NOAA's solar calculator.
 
 This site uses the Luxon library to deal with date/time computations. Luxon is used to simplify computation when dealing with
-durations, conversion between different time zones, and complexities such as daylight saving time. The geo-tz library is used to find 
-the time zone of a geographic coordinate.
+durations, conversion between different time zones, and complexities such as daylight saving time. The geo-tz library is used 
+to find the time zone of a geographic coordinate.
 */
 
 import * as mf from "./mathfuncs.ts";
@@ -41,8 +41,7 @@ export type SunTable = {
 */
 export function sunMeanLong(date: number, unix = false): number {
     if (!unix) { // if date is specified as a Julian century
-        const m = date / 10; // Julian millennium
-        return mf.polymod(m, [4.895063111, 6283.319667476, 5.291887e-4, 3.495482270e-7, -1.14081e-6, -8.77932e-9], TAU);
+        return mf.polymod(date, [4.895063111, 628.3319667476, 5.291887e-6, 3.495482270e-10, -1.14081e-10, -8.77932e-14], TAU);
     }
     else {return sunMeanLong(mf.jCentury(date));}
 }
@@ -65,11 +64,6 @@ export function sunGeomLong(date: number, unix = false): number {
 /** Formula 45.3, in page 308 of Astronomical Algorithms. The value returned is in radians */
 export function meanSunAnomaly(JC: number): number {
     return mf.polymod(JC, [6.240060127, 628.3019551672, -2.68083e-6, 7.1267e-10], TAU);
-}
-
-export function eccentricity(JC: number): number {
-    //return 0.016708617 - 4.2037e-5*JC - 1.236e-7*JC**2;
-    return mf.polynomial(JC, [0.016708617, -4.2037e-5, -1.236e-7]);
 }
 
 /** Distance from sun to earth in kilometers. 
@@ -105,10 +99,9 @@ export function sunDistanceDerivative(unix: number): number {
  */
 export function sunTrueLong(date: number, unix = false): number {
     if (!unix) {
-        const U = date / 100;
         const geoLong = sunGeomLong(date);
-        const aberration = 1e-7*(17*Math.cos(3.1+62830.14*U)-993);
-        const nutation = 1e-7*(-834*Math.sin(2.18-3375.7*U+0.36*U**2)-64*Math.sin(3.51+125666.39*U+0.1*U**2));
+        const aberration = 1.7e-6 * Math.cos(3.1 + 628.3014 * date) - 9.93e-5;
+        const nutation = -8.34e-5*Math.sin(2.18-33.757*date+3.6e-5*date**2)-6.4e-6*Math.sin(3.51+1256.6639*date+1e-5*date**2);
         return mf.mod(geoLong + aberration + nutation, TAU);
     }
     else {return sunTrueLong(mf.jCentury(date));}
@@ -188,8 +181,7 @@ export function equationOfTime(date: number, unix = false): number {
  * @param unix Unix timestamp in milliseconds.
  */
 export function gast(unix: number): number {
-    const JD = mf.jdUTC(unix); // Julian day but using UTC (approximation to UT1) rather than TT
-    const JC = (JD - 2451545) / 36525; // Julian century, but with UTC rather than TT
+    const JC = (mf.jdUTC(unix) - 2451545) / 36525; // Julian century, but with UTC rather than TT
     const gmst = mf.polynomial(JC, [4.8949612127, 230121.67531543, 6.77071e-6, -4.50873e-10]);
     const correction = longNutation(unix, true) * Math.cos(obliquity(unix, true));
     return mf.mod(gmst + correction, TAU);
@@ -204,9 +196,8 @@ export function gast(unix: number): number {
  */
 export function sunHourAngle(long: number, unix: number): number {
     const timeEq = equationOfTime(unix, true);
-    const mst = TAU * (unix + DAY_LENGTH/2) / DAY_LENGTH + long;
-    const ast = mf.mod(timeEq + mst + TAU/2, TAU) - TAU/2; // apparent solar time
-    return ast;
+    const mst = TAU * (unix + DAY_LENGTH/2) / DAY_LENGTH + long; // mean solar time
+    return mf.mod(timeEq + mst + TAU/2, TAU) - TAU/2; // apparent solar time
 }
 
 /**
@@ -221,19 +212,14 @@ export function declination(long: number, obliquity: number): number {
 /**
  * Returns the subsolar point, or location on Earth at which the sun is directly overhead.
  * @param date Longitude, obliquity, distance (LOD) profile for the given moment.
- * @returns [latitude, longitude] of subsolar point in radians. For degrees, use subsolarPointDeg
+ * @param degrees Whether to return values in degrees (true) or radians (false). Defaults to false.
+ * @returns [latitude, longitude] of subsolar point.
  */
-export function subsolarPoint(lod?: LODProfile): number[] {
+export function subsolarPoint(lod?: LODProfile, degrees = false): number[] {
     if (lod === undefined) {lod = generateLODProfile(Date.now());}
-    const subsolarLat = declination(lod.longitude, lod.obliquity);
-    const subsolarLong = -sunHourAngle(0, lod.unix);
-    return [subsolarLat, subsolarLong];
-}
-
-/** Returns subsolar point, but in degrees rather than radians. */
-export function subsolarPointDeg(lod?: LODProfile): number[] {
-    const [latR, longR] = subsolarPoint(lod);
-    return [mf.clamp(latR / degToRad, -90, 90), mf.mod(longR / degToRad + 180, 360) - 180];
+    const lat = declination(lod.longitude, lod.obliquity), long = -sunHourAngle(0, lod.unix);
+    if (degrees) {return [mf.clamp(lat/degToRad,-90,90), mf.mod(long/degToRad+180,360)-180];}
+    else {return [lat, long];}
 }
 
 /** Returns the sun's ECEF coordinates, in kilometers, at the given Unix timestamp in milliseconds. */
@@ -249,12 +235,11 @@ export function sunEcef(unix: number): number[] {
  * @param long Longitude in radians
  * @param lod Longitude, obliquity, distance (LOD) profile.
  * @returns Array: [elevation, azimuth]. Elevation is in radians above horizon, azimuth is radians clockwise from north
- * Solar elevation is not refracted. To find the solar elevation angle adjusted for atmospheric refraction, use mf.refract(sunPosition[0])
+ * Solar elevation is not refracted. To adjust elevation angle for atmospheric refraction, use mf.refract(sunPosition[0])
  */
 export function sunPosition(lat: number, long: number, lod: LODProfile): number[] {
     const [sunLat, sunLong] = subsolarPoint(lod);
-    const sunEcef = mf.toEcef(sunLat, sunLong, lod.distance);
-    return mf.elevAzimuth(lat, long, mf.latLongEcef(lat, long), sunEcef);
+    return mf.elevAzimuth(lat, long, mf.latLongEcef(lat, long), mf.toEcef(sunLat, sunLong, lod.distance));
 }
 
 /**
@@ -359,9 +344,11 @@ export function dawn(lat: number, long: number, angle: number, type: string, max
                 if (eAvg <= angle) {t0 = avgLOD.unix; e0 = eAvg;}
                 else {t1 = avgLOD.unix; e1 = eAvg;}
             }
-            // after reducing to 1-minute interval, use quadratic interpolation
-            const d0 = derivative(lat, long, t0, startLOD, endLOD) / 1000;
-            const t = Math.floor(mf.quadraticZero(t0, t1, e0-angle, e1-angle, d0));
+            // after reducing to sub-5-minute interval, solve using quadratic interpolation
+            const tAvg = (t0 + t1) / 2;
+            const avgLOD = estimateLOD(tAvg, startLOD, endLOD);
+            const eAvg = sunPosition(lat, long, avgLOD)[0];
+            const t = Math.floor(mf.quadraticZero(t0, e0-angle, tAvg, eAvg-angle, t1, e1-angle));
             const [e, a] = sunPosition(lat, long, estimateLOD(t, startLOD, endLOD));
             dawnTimes.push({unix: t, type: type, elev: e, azimuth: a});
         }
@@ -394,9 +381,11 @@ export function dusk(lat: number, long: number, angle: number, type: string, max
                 if (eAvg >= angle) {t0 = avgLOD.unix; e0 = eAvg;}
                 else {t1 = avgLOD.unix; e1 = eAvg;}
             }
-            // after reducing to 1-minute interval, use quadratic interpolation
-            const d0 = derivative(lat, long, t0, startLOD, endLOD) / 1000;
-            const t = Math.floor(mf.quadraticZero(t0, t1, e0-angle, e1-angle, d0));
+            // after reducing to sub-5-minute interval, solve using quadratic interpolation
+            const tAvg = (t0 + t1) / 2;
+            const avgLOD = estimateLOD(tAvg, startLOD, endLOD);
+            const eAvg = sunPosition(lat, long, avgLOD)[0];
+            const t = Math.floor(mf.quadraticZero(t0, e0-angle, tAvg, eAvg-angle, t1, e1-angle));
             const [e, a] = sunPosition(lat, long, estimateLOD(t, startLOD, endLOD));
             duskTimes.push({unix: t, type: type, elev: e, azimuth: a});
         }

@@ -155,26 +155,25 @@ export function moonEcef(unix: number): number[] {
     const ob = sc.obliquity(unix, true);
     const [sinB,cosB,sinL,cosL,sinE,cosE] = [Math.sin(eLat),Math.cos(eLat),Math.sin(eLong),Math.cos(eLong),Math.sin(ob),Math.cos(ob)];
     
-    // xq, yq, zq are geocentric equatorial (Earth-centered inertial) coordinates
+    // Geocentric equatorial (Earth-centered inertial) coordinates
     const dist = moonDistance(unix, true);
     const xeci = dist * cosB * cosL;
     const yeci = dist * (cosB * sinL * cosE - sinB * sinE);
     const zeci = dist * (cosB * sinL * sinE + sinB * cosE);
 
-    // convert to ECEF coordinates
+    // Convert to ECEF coordinates
     const rectCoords = mf.rotateZ(xeci, yeci, zeci, -sc.gast(unix));
     return rectCoords;
 }
 
-/** Returns the sublunar point [latitude, longitude] in radians. For degrees, use sublunarPointDeg. */
-export function sublunarPoint(unix: number): number[] {
-    return mf.subpoint(moonEcef(unix));
-}
-
-/** Returns sublunar point but in degrees rather than radians. */
-export function sublunarPointDeg(unix: number): number[] {
-    const [latR, longR] = sublunarPoint(unix);
-    return [mf.clamp(latR / degToRad, -90, 90), mf.mod(longR / degToRad + 180, 360) - 180];
+/** Returns the sublunar point [latitude, longitude].
+ * @param unix Unix timestamp in milliseconds.
+ * @param degrees Whether to return coordinates in degrees (true) or radians (false). Defaults to false.
+ */
+export function sublunarPoint(unix: number, degrees = false): number[] {
+    const [lat, long] = mf.subpoint(moonEcef(unix));
+    if (degrees) {return [mf.clamp(lat/degToRad,-90,90), mf.mod(long/degToRad+180,360)-180];}
+    else {return [lat, long];}
 }
 
 /** The hour angle of the moon at the given longitude and Unix timestamp, in radians between -TAU/2 and TAU/2. 
@@ -268,8 +267,9 @@ export function moonrise(lat: number, long: number, maxMin: number[], angle: num
                 if (eAvg <= angle) {t0 = tAvg; e0 = eAvg;}
                 else {t1 = tAvg; e1 = eAvg;}
             }
-            const d0 = moonDerivative(lat, long, t0) / 1000;
-            const t = Math.floor(mf.quadraticZero(t0, t1, e0-angle, e1-angle, d0));
+            const tAvg = (t0 + t1) / 2;
+            const eAvg = moonPosition(lat, long, tAvg)[0];
+            const t = Math.floor(mf.quadraticZero(t0, e0-angle, tAvg, eAvg-angle, t1, e1-angle));
             const [e, a] = moonPosition(lat, long, t);
             riseTimes.push({unix: t, type: "Moonrise", elev: e, azimuth: a});
         }
@@ -298,8 +298,9 @@ export function moonset(lat: number, long: number, maxMin: number[], angle: numb
                 if (eAvg >= angle) {t0 = tAvg; e0 = eAvg;}
                 else {t1 = tAvg; e1 = eAvg;}
             }
-            const d0 = moonDerivative(lat, long, t0) / 1000;
-            const t = Math.floor(mf.quadraticZero(t0, t1, e0-angle, e1-angle, d0));
+            const tAvg = (t0 + t1) / 2;
+            const eAvg = moonPosition(lat, long, tAvg)[0];
+            const t = Math.floor(mf.quadraticZero(t0, e0-angle, tAvg, eAvg-angle, t1, e1-angle));
             const [e, a] = moonPosition(lat, long, t);
             setTimes.push({unix: t, type: "Moonset", elev: e, azimuth: a});
         }

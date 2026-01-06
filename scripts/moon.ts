@@ -40,7 +40,7 @@ else {
     const dayStarts = mf.dayStarts(DateTime.fromObject({year: date.year}, {zone: date.zone}), 
         DateTime.fromObject({year: date.year+1}, {zone: date.zone}));
     const timeZoneTable = timeZoneLookupTable(dayStarts);
-    const [sublunarLat, sublunarLong] = mc.sublunarPointDeg(mf.ms(date));
+    const [sublunarLat, sublunarLong] = mc.sublunarPoint(mf.ms(date), true);
     let [elev, az] = mc.moonPosition(lat * degToRad, long * degToRad, mf.ms(date));
     let apparentElev = mf.refract(elev);
     const distance = mc.moonDistance(mf.ms(date), true);
