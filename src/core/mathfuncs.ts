@@ -1,5 +1,5 @@
 import { DateTime } from 'luxon';
-import {DAY_LENGTH, earthERadius, flattening, J2000UTC, deltaT, earthPRadius, TAU, HORIZON} from "./constants.ts";
+import {DAY_LENGTH, earthERadius, flattening, J2000UTC, deltaT, earthPRadius, HORIZON} from "./constants.ts";
 
 export type Point = [number, number];
 export type Polygon = Point[];
@@ -89,8 +89,8 @@ export function jdUTC(unix: number) {return unix / DAY_LENGTH + 2440587.5;}
  */
 export function direction(bearing: number) {
     const directions = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
-    const adjBearing = mod(bearing + TAU/32, TAU);
-    const index = clamp(Math.floor(adjBearing / TAU * 16), 0, 15);
+    const adjBearing = mod(bearing + Math.PI/16, 2*Math.PI);
+    const index = clamp(Math.floor(adjBearing / Math.PI * 8), 0, 15);
     return directions[index];
 }
 
@@ -191,7 +191,7 @@ export function toEcef(lat: number, long: number, dist: number): number[] {
  * @param ecefO ECEF coordinates of observer.
  * @param ecefC ECEF coordinates of celestial object (planet, moon, star).
  * @returns [elevation, azimuth] of celestial object as seen from observer. Both are given in radians, and should be
- * multiplied by (360/TAU) to convert to degrees.
+ * multiplied by (180/pi) to convert to degrees.
  */
 export function elevAzimuth(lat: number, long: number, ecefO: number[], ecefC: number[]): number[] {
     const [xe, ye, ze] = ecefC; // celestial body's ECEF
@@ -207,13 +207,13 @@ export function elevAzimuth(lat: number, long: number, ecefO: number[], ecefC: n
     // convert ENU to elevation and azimuth
     const R = Math.hypot(E, N, U);
     const elev = Math.asin(clamp(U / R)); // elevation above horizon
-    const az = mod(Math.atan2(E, N), TAU); // radians clockwise from north
+    const az = mod(Math.atan2(E, N), 2*Math.PI); // radians clockwise from north
     return [elev, az];
 }
 
 /** Finds the subpoint of a celestial body - the [latitude, longitude] at which the body is directly overhead - given the
  * body's ECEF coordinates.
- * Latitude and longitude are in radians and are in the range [-TAU/4, TAU/4] and [-TAU/2, TAU/2) respectively.
+ * Latitude and longitude are in radians and are in the range [-pi/2, pi/2] and [-pi, pi) respectively.
  */
 export function subpoint(ecef: number[]): number[] {
     const a = earthERadius;
@@ -247,7 +247,7 @@ export function subpoint(ecef: number[]): number[] {
 
     const p = Math.hypot(x, y);
     if (p === 0) { // poles - longitude arbitrary so we use 0
-        return [(z >= 0) ? TAU/4 : -TAU/4, 0];
+        return [(z >= 0) ? Math.PI/2 : -Math.PI/2, 0];
     }
 
     const lon = Math.atan2(y, x);
@@ -263,7 +263,7 @@ export function subpoint(ecef: number[]): number[] {
         lat = latNext;
     }
 
-    return [clamp(lat, -TAU/4, TAU/4), mod(lon + TAU/2, TAU) - TAU/2];
+    return [clamp(lat, -Math.PI/2, Math.PI/2), mod(lon + Math.PI, 2*Math.PI) - Math.PI];
 }
 
 /** Given a start date and an end date, both with the same IANA time zone identifier, return an array of Luxon DateTimes with
@@ -286,20 +286,20 @@ export function meridianPassings(
     long: number, // longitude in radians
     start: number, // start of day, in Unix milliseconds
     end: number, // end of day, in Unix milliseconds
-    targetHourAngle: number, // in radians (ex. 0 for solar noon, or +-TAU/2 for solar midnight)
-    hAngle: HourAngleFn // function returning hour angle in radians, range [-TAU/2, TAU/2)
+    targetHourAngle: number, // in radians (ex. 0 for solar noon, or ±pi for solar midnight)
+    hAngle: HourAngleFn // function returning hour angle in radians, range [-pi, pi)
 ): number[] 
 {
     const ha0 = hAngle(long, start), ha1 = hAngle(long, end);
-    const haDiff = mod(ha1 - ha0 - TAU/2, TAU) + TAU/2; // change in hour angle (rad) during the day, range [0.5*tau, 1.5*tau)
-    const targetAdjusted = mod(targetHourAngle - ha0, TAU); // diff between target hour angle and hour angle at 00:00
+    const haDiff = mod(ha1 - ha0 - Math.PI, 2*Math.PI) + Math.PI; // change in hour angle (rad) during the day
+    const targetAdjusted = mod(targetHourAngle - ha0, 2*Math.PI); // diff between target hour angle and hour angle at 00:00
 
     const haRate = haDiff / (end - start); // rate at which the hour angle is changing, in radians per millisecond.
     const times = [];
-    for (let i = targetAdjusted; i < haDiff; i += TAU) {
+    for (let i = targetAdjusted; i < haDiff; i += 2*Math.PI) {
         let t = start + i / haRate;
         const ha = hAngle(long, t);
-        const diff = mod(targetHourAngle - ha + TAU/2, TAU) - TAU/2;
+        const diff = mod(targetHourAngle - ha + Math.PI, 2*Math.PI) - Math.PI;
         t += diff / haRate;
         times.push(Math.floor(clamp(t, start, end-1)));
     }

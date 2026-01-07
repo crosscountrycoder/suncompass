@@ -2,7 +2,7 @@ import {DateTime} from "luxon";
 import * as mf from "./mathfuncs.ts";
 import {sunTrueLong, sunDistance, obliquity} from "./suncalc.ts";
 import {illumination} from "./mooncalc.ts";
-import { DAY_LENGTH, degToRad, HORIZON, TAU } from "./constants.ts";
+import { DAY_LENGTH, degToRad, HORIZON } from "./constants.ts";
 
 /** Object representing the change in a location's time zone. 
  * @param unix the Unix timestamp at which the change occurs.
@@ -13,7 +13,7 @@ export type TimeChange = {unix: number; offset: number; change: boolean};
 
 /** Object representing solar ecliptic longitude, obliquity, and distance (LOD) at a particular Unix moment.
  * @param unix Unix timestamp in milliseconds.
- * @param longitude Solar ecliptic longitude in radians, range [0, TAU).
+ * @param longitude Solar ecliptic longitude in radians, range [0, 2*pi).
  * @param obliquity Obliquity of ecliptic in radians.
  * @param distance Sun-earth distance in kilometers.
  */
@@ -77,12 +77,12 @@ export function longDistLookupTable(dayStarts: DateTime[]): LODProfile[] {
  * from the start of the day to the end of the day.
  */
 export function estimateLOD(unix: number, start: LODProfile, end: LODProfile): LODProfile {
-    const diffLong = mf.mod(end.longitude - start.longitude, TAU);
+    const diffLong = mf.mod(end.longitude - start.longitude, 2*Math.PI);
     const diffObliquity = end.obliquity - start.obliquity;
     const diffDistance = end.distance - start.distance;
 
     const fraction = (unix - start.unix) / (end.unix - start.unix);
-    const estLongitude = mf.mod(start.longitude + fraction * diffLong, TAU);
+    const estLongitude = mf.mod(start.longitude + fraction * diffLong, 2*Math.PI);
     const estObliquity = start.obliquity + fraction * diffObliquity;
     const estDistance = start.distance + fraction * diffDistance;
     return {unix: unix, longitude: estLongitude, obliquity: estObliquity, distance: estDistance};

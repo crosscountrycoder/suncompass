@@ -1,13 +1,10 @@
 // This file contains constant values such as the conversion factor between degrees and radians, as well as periodic terms for 
 // calculation of the sun and moon positions.
 
-/** The ratio of a circle's circumference to its radius, or the number of radians in a full rotation. Equal to 2*pi. */
-export const TAU = 2*Math.PI;
-
 /** The number of radians in a degree, or the factor to multiply by when converting an angle from degrees to radians. 
  * To convert from radians to degrees, divide by degToRad.
 */
-export const degToRad = TAU/360;
+export const degToRad = Math.PI/180;
 
 /** Solar elevation thresholds for sunrise/sunset (HORIZON), civil, nautical and astronomical twilight. */
 export const HORIZON = (-5/6) * degToRad;

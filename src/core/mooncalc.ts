@@ -2,7 +2,7 @@
 
 import * as mf from "./mathfuncs.ts";
 import * as sc from "./suncalc.ts";
-import {BSEARCH_GAP, DAY_LENGTH, degToRad, HORIZON, moonPtl, moonPtld, TAU} from "./constants.ts";
+import {BSEARCH_GAP, DAY_LENGTH, degToRad, HORIZON, moonPtl, moonPtld} from "./constants.ts";
 import { generateLODProfile, getTimeOfDay, timeZoneLookupTable, type SEvent, type TimeChange } from "./lookup-tables.ts";
 import { DateTime } from "luxon";
 
@@ -20,20 +20,20 @@ export type MoonTable = {
 }
 
 export function moonMeanLongitude(JC: number): number {
-    return mf.polymod(JC, [3.810341023, 8399.7091135216, -2.3157e-5, 3.23904e-8, -2.67713e-10], TAU);
+    return mf.polymod(JC, [3.810341023, 8399.7091135216, -2.3157e-5, 3.23904e-8, -2.67713e-10], 2*Math.PI);
 }
 
 export function moonMeanElongation(JC: number): number {
-    return mf.polymod(JC, [5.198466741, 7771.3771468129, -2.84489e-5, 3.19735e-8, -1.54365e-10], TAU);
+    return mf.polymod(JC, [5.198466741, 7771.3771468129, -2.84489e-5, 3.19735e-8, -1.54365e-10], 2*Math.PI);
 }
 
 export function moonMeanAnomaly(JC: number): number {
-    return mf.polymod(JC, [2.355555899, 8328.6914269548, 1.57027e-4, 2.50410e-7, -1.18633e-9], TAU);
+    return mf.polymod(JC, [2.355555899, 8328.6914269548, 1.57027e-4, 2.50410e-7, -1.18633e-9], 2*Math.PI);
 }
 
 /** Moon argument of latitude */
 export function moonArgLat(JC: number): number {
-    return mf.polymod(JC, [1.627905233, 8433.4661581307, -5.93918e-5, -4.94988e-9, 2.02167e-11], TAU);
+    return mf.polymod(JC, [1.627905233, 8433.4661581307, -5.93918e-5, -4.94988e-9, 2.02167e-11], 2*Math.PI);
 }
 
 /** Sum of all longitude terms in moonPtld (periodic terms for longitude and distance) */
@@ -130,8 +130,8 @@ export function moonLatLong(date: number, unix = false): number[] {
     if (!unix) {
         let long = moonMeanLongitude(date) + l(date) + deltaL(date) + sc.longNutation(date);
         let lat = b(date) + deltaB(date);
-        lat = mf.clamp(lat, -TAU/4, TAU/4);
-        long = mf.mod(long, TAU);
+        lat = mf.clamp(lat, -Math.PI/2, Math.PI/2);
+        long = mf.mod(long, 2*Math.PI);
         return [lat, long];
     }
     else {return moonLatLong(mf.jCentury(date));}
@@ -176,10 +176,10 @@ export function sublunarPoint(unix: number, degrees = false): number[] {
     else {return [lat, long];}
 }
 
-/** The hour angle of the moon at the given longitude and Unix timestamp, in radians between -TAU/2 and TAU/2. 
+/** The hour angle of the moon at the given longitude and Unix timestamp, in radians between -pi and pi. 
  * This is equal to the observer's longitude minus the longitude of the sublunar point. */
 export function moonHourAngle(longitude: number, unix: number): number {
-    return mf.mod(longitude - sublunarPoint(unix)[1] + TAU/2, TAU) - TAU/2;
+    return mf.mod(longitude - sublunarPoint(unix)[1] + Math.PI, 2*Math.PI) - Math.PI;
 }
 
 /** Returns the moon's position: [elevation, azimuth] in radians. Optionally, the observer's ECEF can be specified in order
@@ -251,7 +251,7 @@ export function moonMaxMin(lat: number, long: number, start: number, end: number
  * @param lat Latitude of observer, radians
  * @param long Longitude of observer, radians
  * @param maxMin Results of moonMaxMin() for the given day and location
- * @param angle The threshold elevation angle, in radians (defaults to -5/2160*tau = -5/6°)
+ * @param angle The threshold elevation angle, in radians (defaults to -5/1080*pi = -5/6°)
  * @returns An array of SEvent objects, with the time, elevation, and azimuth of the moon, and a type tag.
  */
 export function moonrise(lat: number, long: number, maxMin: number[], angle: number = HORIZON): SEvent[] {
@@ -282,7 +282,7 @@ export function moonrise(lat: number, long: number, maxMin: number[], angle: num
  * @param lat Latitude of observer, radians
  * @param long Longitude of observer, radians
  * @param maxMin Results of moonMaxMin() for the given day and location
- * @param angle The threshold elevation angle, in radians (defaults to -5/2160*tau = -5/6°)
+ * @param angle The threshold elevation angle, in radians (defaults to -5/1080*pi = -5/6°)
  * @returns An array of SEvent objects, with the time, elevation, and azimuth of the moon, and a type tag.
  */
 export function moonset(lat: number, long: number, maxMin: number[], angle: number = HORIZON): SEvent[] {
@@ -333,10 +333,10 @@ export function illumination(unix: number): number {
     return (1 + Math.cos(phaseAngle(unix))) / 2;
 }
 
-/** The difference between the ecliptic longitudes of the sun and moon, in radians, normalized to the range [0, TAU).
- * A value of 0 indicates a new moon, 0.25\*TAU is a first quarter, 0.5\*TAU is a half moon and 0.75\*TAU is a last quarter. */
+/** The difference between the ecliptic longitudes of the sun and moon, in radians, normalized to the range [0, 2*pi).
+ * A value of 0 indicates a new moon, pi/2 is a first quarter, pi is a half moon and 3*pi/2 is a last quarter. */
 export function moonSunLongDiff(unix: number): number {
-    return mf.mod(moonLatLong(unix, true)[1] - sc.sunTrueLong(unix, true), TAU);
+    return mf.mod(moonLatLong(unix, true)[1] - sc.sunTrueLong(unix, true), 2*Math.PI);
 }
 
 /**
@@ -356,46 +356,46 @@ export function moonPhase(lat: number, long: number, start: number, end: number)
         while (t1 - t0 > BSEARCH_GAP) {
             const tAvg = (t0+t1)/2;
             const pAvg = moonSunLongDiff(tAvg);
-            if (pAvg > 0.5*TAU) {t0 = tAvg; p0 = pAvg;}
+            if (pAvg > Math.PI) {t0 = tAvg; p0 = pAvg;}
             else {t1 = tAvg; p1 = pAvg;}
         }
-        const frac = (TAU - p0) / (p1 - p0 + TAU);
+        const frac = (2*Math.PI - p0) / (p1 - p0 + 2*Math.PI);
         const t = Math.floor(t0 + frac * (t1 - t0));
         const [e, a] = moonPosition(lat, long, t);
         return {unix: t, type: "New Moon", elev: e, azimuth: a};
     }
-    else if (p0 <= 0.25*TAU && p1 >= 0.25*TAU) { // first quarter
+    else if (p0 <= 0.5*Math.PI && p1 >= 0.5*Math.PI) { // first quarter
         while (t1 - t0 > BSEARCH_GAP) {
             const tAvg = (t0+t1)/2;
             const pAvg = moonSunLongDiff(tAvg);
-            if (pAvg <= 0.25*TAU) {t0 = tAvg; p0 = pAvg;}
+            if (pAvg <= 0.5*Math.PI) {t0 = tAvg; p0 = pAvg;}
             else {t1 = tAvg; p1 = pAvg;}
         }
-        const frac = (0.25*TAU - p0) / (p1 - p0);
+        const frac = (0.5*Math.PI - p0) / (p1 - p0);
         const t = Math.floor(t0 + frac * (t1 - t0));
         const [e, a] = moonPosition(lat, long, t);
         return {unix: t, type: "First Quarter", elev: e, azimuth: a};
     }
-    else if (p0 <= 0.5*TAU && p1 >= 0.5*TAU) { // full moon
+    else if (p0 <= Math.PI && p1 >= Math.PI) { // full moon
         while (t1 - t0 > BSEARCH_GAP) {
             const tAvg = (t0+t1)/2;
             const pAvg = moonSunLongDiff(tAvg);
-            if (pAvg <= 0.5*TAU) {t0 = tAvg; p0 = pAvg;}
+            if (pAvg <= Math.PI) {t0 = tAvg; p0 = pAvg;}
             else {t1 = tAvg; p1 = pAvg;}
         }
-        const frac = (0.5*TAU - p0) / (p1 - p0);
+        const frac = (Math.PI - p0) / (p1 - p0);
         const t = Math.floor(t0 + frac * (t1 - t0));
         const [e, a] = moonPosition(lat, long, t);
         return {unix: t, type: "Full Moon", elev: e, azimuth: a};
     }
-    else if (p0 <= 0.75*TAU && p1 >= 0.75*TAU) { // last quarter
+    else if (p0 <= 1.5*Math.PI && p1 >= 1.5*Math.PI) { // last quarter
         while (t1 - t0 > BSEARCH_GAP) {
             const tAvg = (t0+t1)/2;
             const pAvg = moonSunLongDiff(tAvg);
-            if (pAvg <= 0.75*TAU) {t0 = tAvg; p0 = pAvg;}
+            if (pAvg <= 1.5*Math.PI) {t0 = tAvg; p0 = pAvg;}
             else {t1 = tAvg; p1 = pAvg;}
         }
-        const frac = (0.75*TAU - p0) / (p1 - p0);
+        const frac = (1.5*Math.PI - p0) / (p1 - p0);
         const t = Math.floor(t0 + frac * (t1 - t0));
         const [e, a] = moonPosition(lat, long, t);
         return {unix: t, type: "Last Quarter", elev: e, azimuth: a};
@@ -413,9 +413,9 @@ export function moonPhase(lat: number, long: number, start: number, end: number)
 export function moonPhaseDay(start: number, end: number): string {
     const diff0 = moonSunLongDiff(start);
     const diff1 = moonSunLongDiff(end);
-    if (diff0 <= 0.25*TAU) {return (diff1 >= 0.25*TAU) ? "First Quarter" : "Waxing Crescent";}
-    else if (diff0 <= 0.5*TAU) {return (diff1 >= 0.5*TAU) ? "Full Moon" : "Waxing Gibbous";}
-    else if (diff0 <= 0.75*TAU) {return (diff1 >= 0.75*TAU) ? "Last Quarter" : "Waning Gibbous";}
+    if (diff0 <= 0.5*Math.PI) {return (diff1 >= 0.5*Math.PI) ? "First Quarter" : "Waxing Crescent";}
+    else if (diff0 <= Math.PI) {return (diff1 >= Math.PI) ? "Full Moon" : "Waxing Gibbous";}
+    else if (diff0 <= 1.5*Math.PI) {return (diff1 >= 1.5*Math.PI) ? "Last Quarter" : "Waning Gibbous";}
     else {return (diff1 < diff0) ? "New Moon" : "Waning Crescent";}
 }
 

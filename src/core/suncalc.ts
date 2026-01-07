@@ -18,7 +18,7 @@ to find the time zone of a geographic coordinate.
 */
 
 import * as mf from "./mathfuncs.ts";
-import {degToRad, sunPeriodicTerms, DAY_LENGTH, BSEARCH_GAP, TAU, HORIZON, CIVIL_TWILIGHT, NAUTICAL_TWILIGHT, ASTRO_TWILIGHT} from "./constants.ts";
+import {degToRad, sunPeriodicTerms, DAY_LENGTH, BSEARCH_GAP, HORIZON, CIVIL_TWILIGHT, NAUTICAL_TWILIGHT, ASTRO_TWILIGHT} from "./constants.ts";
 import {generateLODProfile, estimateLOD, getTimeOfDay, timeZoneLookupTable, longDistLookupTable} from "./lookup-tables.ts";
 import type {TimeChange, LODProfile, SEvent} from "./lookup-tables.ts";
 import {DateTime} from "luxon";
@@ -41,7 +41,7 @@ export type SunTable = {
 */
 export function sunMeanLong(date: number, unix = false): number {
     if (!unix) { // if date is specified as a Julian century
-        return mf.polymod(date, [4.895063111, 628.3319667476, 5.291887e-6, 3.495482270e-10, -1.14081e-10, -8.77932e-14], TAU);
+        return mf.polymod(date, [4.895063111, 628.3319667476, 5.291887e-6, 3.495482270e-10, -1.14081e-10, -8.77932e-14], 2*Math.PI);
     }
     else {return sunMeanLong(mf.jCentury(date));}
 }
@@ -56,14 +56,14 @@ export function sunGeomLong(date: number, unix = false): number {
         for (const curRow of sunPeriodicTerms) {
             long += curRow[0] * Math.sin(curRow[2]+curRow[3]*date);
         }
-        return mf.mod(long, TAU);
+        return mf.mod(long, 2*Math.PI);
     }
     else {return sunGeomLong(mf.jCentury(date));}
 }
 
 /** Formula 45.3, in page 308 of Astronomical Algorithms. The value returned is in radians */
 export function meanSunAnomaly(JC: number): number {
-    return mf.polymod(JC, [6.240060127, 628.3019551672, -2.68083e-6, 7.1267e-10], TAU);
+    return mf.polymod(JC, [6.240060127, 628.3019551672, -2.68083e-6, 7.1267e-10], 2*Math.PI);
 }
 
 /** Distance from sun to earth in kilometers. 
@@ -93,7 +93,7 @@ export function sunDistanceDerivative(unix: number): number {
 
 /**
  * Calculates the sun's apparent ecliptic longitude in radians to within 1.6e-5 rad for years 0-3000. This value is 0 at the
- * March equinox, 0.25*TAU at the June solstice, 0.5*TAU at the September equinox and 0.75*TAU at the December solstice.
+ * March equinox, pi/2 at the June solstice, pi at the September equinox and 3*pi/2 at the December solstice.
  * @param date The timestamp.
  * @param unix If true, date is measured in Unix milliseconds. If false, date is Julian centuries since J2000 epoch.
  */
@@ -102,7 +102,7 @@ export function sunTrueLong(date: number, unix = false): number {
         const geoLong = sunGeomLong(date);
         const aberration = 1.7e-6 * Math.cos(3.1 + 628.3014 * date) - 9.93e-5;
         const nutation = -8.34e-5*Math.sin(2.18-33.757*date+3.6e-5*date**2)-6.4e-6*Math.sin(3.51+1256.6639*date+1e-5*date**2);
-        return mf.mod(geoLong + aberration + nutation, TAU);
+        return mf.mod(geoLong + aberration + nutation, 2*Math.PI);
     }
     else {return sunTrueLong(mf.jCentury(date));}
 }
@@ -113,10 +113,10 @@ export function sunTrueLong(date: number, unix = false): number {
 */
 export function obNutation(date: number, unix = false) {
     if (!unix) {
-        const L = mf.mod(4.895064 + 628.3319663*date, TAU);
-        const Lprime = mf.mod(3.810342 + 8399.709113*date, TAU);
-        const omega = mf.polymod(date, [2.1824386, -33.75704594, 3.61423e-5, 3.87851e-8], TAU);
-        return 4.5e-5*Math.cos(omega) + 2.8e-6*Math.cos(2*L) + 4.8e-7*Math.cos(2*Lprime) - 4.4e-7*Math.cos(2*omega);
+        const L = mf.mod(4.895064 + 628.3319663*date, 2*Math.PI);
+        const Lprime = mf.mod(3.810342 + 8399.709113*date, 2*Math.PI);
+        const omega = mf.polymod(date, [2.1824386, -33.75704594, 3.61423e-5, 3.87851e-8], 2*Math.PI);
+        return 4.46e-5*Math.cos(omega) + 2.8e-6*Math.cos(2*L) + 4.8e-7*Math.cos(2*Lprime) - 4.4e-7*Math.cos(2*omega);
     }
     else {return obNutation(mf.jCentury(date));}
 }
@@ -127,9 +127,9 @@ export function obNutation(date: number, unix = false) {
 */
 export function longNutation(date: number, unix = false) {
     if (!unix) {
-        const L = mf.mod(4.895064 + 628.3319663*date, TAU);
-        const Lprime = mf.mod(3.810342 + 8399.709113*date, TAU);
-        const omega = mf.polymod(date, [2.1824386, -33.75704594, 3.61423e-5, 3.87851e-8], TAU);
+        const L = mf.mod(4.895064 + 628.3319663*date, 2*Math.PI);
+        const Lprime = mf.mod(3.810342 + 8399.709113*date, 2*Math.PI);
+        const omega = mf.polymod(date, [2.1824386, -33.75704594, 3.61423e-5, 3.87851e-8], 2*Math.PI);
         return -8.34e-5*Math.sin(omega) - 6.40e-6*Math.sin(2*L) - 1.12e-6*Math.sin(2*Lprime) + 1.02e-6*Math.sin(2*omega);
     }
     else {return longNutation(mf.jCentury(date));}
@@ -149,7 +149,7 @@ export function obliquity(date: number, unix = false): number {
 }
 
 /**
- * Calculates the sun's right ascension in radians. To convert to hours, multiply by (24/TAU).
+ * Calculates the sun's right ascension in radians. To convert to hours, multiply by (12 / pi).
  * @param date The timestamp.
  * @param unix If true, date is measured in Unix milliseconds. If false, date is Julian centuries since J2000 epoch.
  */
@@ -158,46 +158,46 @@ export function sunRA(date: number, unix = false): number {
         const long = sunTrueLong(date);
         const ob = obliquity(date);
         const ra = Math.atan2(Math.sin(long)*Math.cos(ob), Math.cos(long));
-        return mf.mod(ra, TAU);
+        return mf.mod(ra, 2*Math.PI);
     }
     else {return sunRA(mf.jCentury(date));}
 }
 
 /**
- * Equation of time in radians. To convert to minutes, multiply by (1440 / TAU).
+ * Equation of time in radians. To convert to minutes, multiply by (720 / pi).
  * @param date The timestamp.
  * @param unix If true, date is measured in Unix milliseconds. If false, date is Julian centuries since J2000 epoch.
  */
 export function equationOfTime(date: number, unix = false): number { 
     if (!unix) {
         const eot = sunMeanLong(date) - 9.98032e-5 - sunRA(date) + longNutation(date) * Math.cos(obliquity(date));
-        return mf.mod(eot + TAU/2, TAU) - TAU/2; // reduce to range [-tau/2, tau/2)
+        return mf.mod(eot + Math.PI, 2*Math.PI) - Math.PI; // reduce to range [-pi, pi)
     }
     else {return equationOfTime(mf.jCentury(date));}
 }
 
 /** Gives the value of Greenwich apparent sidereal time (GAST) in radians, from equation 11.4 in Astronomical Algorithms.
- * The value returned is in the range 0 <= x < TAU.
+ * The value returned is in the range 0 <= x < 2 * pi.
  * @param unix Unix timestamp in milliseconds.
  */
 export function gast(unix: number): number {
     const JC = (mf.jdUTC(unix) - 2451545) / 36525; // Julian century, but with UTC rather than TT
     const gmst = mf.polynomial(JC, [4.8949612127, 230121.67531543, 6.77071e-6, -4.50873e-10]);
     const correction = longNutation(unix, true) * Math.cos(obliquity(unix, true));
-    return mf.mod(gmst + correction, TAU);
+    return mf.mod(gmst + correction, 2*Math.PI);
 }
 
 /**
  * Returns the sun's hour angle in radians, or the observer's longitude minus the longitude of the subsolar point. A value
- * of ±TAU/2 indicates solar midnight and 0 indicates solar noon. To convert to apparent solar time in hours, multiply by 
- * (24/TAU) and add 12.
+ * of ±pi indicates solar midnight and 0 indicates solar noon. To convert to apparent solar time in hours, multiply by 
+ * (12/pi) and add 12.
  * @param long Observer's longitude in radians.
  * @param unix Unix timestamp in milliseconds.
  */
 export function sunHourAngle(long: number, unix: number): number {
     const timeEq = equationOfTime(unix, true);
-    const mst = TAU * (unix + DAY_LENGTH/2) / DAY_LENGTH + long; // mean solar time
-    return mf.mod(timeEq + mst + TAU/2, TAU) - TAU/2; // apparent solar time
+    const mst = 2 * Math.PI * (unix + DAY_LENGTH/2) / DAY_LENGTH + long; // mean solar time
+    return mf.mod(timeEq + mst + Math.PI, 2*Math.PI) - Math.PI; // apparent solar time
 }
 
 /**
@@ -269,7 +269,7 @@ export function solarNoon(lat: number, long: number, start: LODProfile, end: LOD
  * @returns Time(s) of solar midnight, along with the sun's position at solar midnight.
  */
 export function solarMidnight(lat: number, long: number, start: LODProfile, end: LODProfile): SEvent[] {
-    const solarMidnightTimes = mf.meridianPassings(long, start.unix, end.unix, TAU/2, sunHourAngle);
+    const solarMidnightTimes = mf.meridianPassings(long, start.unix, end.unix, Math.PI, sunHourAngle);
     const events: SEvent[] = [];
     for (const time of solarMidnightTimes) {
         const [e, a] = sunPosition(lat, long, estimateLOD(time, start, end));
@@ -484,18 +484,17 @@ export function calcSolstEq(year: number, month: 3 | 6 | 9 | 12) {
     let t0 = (year + (month - 1) / 12 - 1970) * 31556952000;
     let t1 = t0 + 2629746000; // approx. 1 month after start
     let l0 = sunTrueLong(t0, true), l1 = sunTrueLong(t1, true);
-    if (l0 > l1) {l0 -= TAU;}
-    const thresh = (month - 3) * TAU/12;
+    if (l0 > l1) {l0 -= 2*Math.PI;}
+    const thresh = (month - 3) * Math.PI/6;
     while (t1 - t0 > 9e5) { // 15 minutes
         const tAvg = (t0 + t1) / 2;
         let lAvg = sunTrueLong(tAvg, true);
-        if (lAvg >= l1) {lAvg -= TAU;}
+        if (lAvg >= l1) {lAvg -= 2*Math.PI;}
         if (lAvg <= thresh) {t0 = tAvg; l0 = lAvg;}
         else {t1 = tAvg; l1 = lAvg;}
     }
     const frac = (thresh - l0) / (l1 - l0); // linearly interpolate within 7.5-15 minute window
-    const t = Math.floor(t0 + frac * (t1 - t0));
-    return t;
+    return Math.floor(t0 + frac * (t1 - t0));
 }
 
 /** Calculates the sun's apsides (aphelion and perihelion) for a particular year bounded by start and end Unix timestamps.
