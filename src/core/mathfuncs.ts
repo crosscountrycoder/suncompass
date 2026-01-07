@@ -114,7 +114,7 @@ export function quadraticZero(x0: number, y0: number, x1: number, y1: number, x2
     const c = y0;
     if (Math.abs(2 * a / b) < 1e-4) { // if almost linear
         if (y0 === y2) {return (x0 + x2) / 2;} // placeholder when undefined
-        else {return x0 + (y0 / (y0 - y2)) * (x2 - x0);}
+        else {return clamp(x0 + (y0 / (y0 - y2)) * (x2 - x0), x0, x2);}
     }
     else {
         const disc = b**2 - 4*a*c;
@@ -123,7 +123,7 @@ export function quadraticZero(x0: number, y0: number, x1: number, y1: number, x2
             const sol1 = (Math.sqrt(disc) - b) / (2 * a);
             const sol2 = (-Math.sqrt(disc) - b) / (2 * a);
             const solution = (Math.abs(sol1 - 0.5) <= Math.abs(sol2 - 0.5)) ? sol1 : sol2;
-            return x0 + solution * (x2 - x0);
+            return clamp(x0 + solution * (x2 - x0), x0, x2);
         }
     }
 }
