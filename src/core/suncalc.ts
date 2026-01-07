@@ -41,7 +41,8 @@ export type SunTable = {
 */
 export function sunMeanLong(date: number, unix = false): number {
     if (!unix) { // if date is specified as a Julian century
-        return mf.polymod(date, [4.895063111, 628.3319667476, 5.291887e-6, 3.495482270e-10, -1.14081e-10, -8.77932e-14], 2*Math.PI);
+        return mf.polynomial(date, 
+            [4.895063111, 628.3319667476, 5.291887e-6, 3.495482270e-10, -1.14081e-10, -8.77932e-14], 2*Math.PI);
     }
     else {return sunMeanLong(mf.jCentury(date));}
 }
@@ -63,7 +64,7 @@ export function sunGeomLong(date: number, unix = false): number {
 
 /** Formula 45.3, in page 308 of Astronomical Algorithms. The value returned is in radians */
 export function meanSunAnomaly(JC: number): number {
-    return mf.polymod(JC, [6.240060127, 628.3019551672, -2.68083e-6, 7.1267e-10], 2*Math.PI);
+    return mf.polynomial(JC, [6.240060127, 628.3019551672, -2.68083e-6, 7.1267e-10], 2*Math.PI);
 }
 
 /** Distance from sun to earth in kilometers. 
@@ -115,7 +116,7 @@ export function obNutation(date: number, unix = false) {
     if (!unix) {
         const L = mf.mod(4.895064 + 628.3319663*date, 2*Math.PI);
         const Lprime = mf.mod(3.810342 + 8399.709113*date, 2*Math.PI);
-        const omega = mf.polymod(date, [2.1824386, -33.75704594, 3.61423e-5, 3.87851e-8], 2*Math.PI);
+        const omega = mf.polynomial(date, [2.1824386, -33.75704594, 3.61423e-5, 3.87851e-8], 2*Math.PI);
         return 4.46e-5*Math.cos(omega) + 2.8e-6*Math.cos(2*L) + 4.8e-7*Math.cos(2*Lprime) - 4.4e-7*Math.cos(2*omega);
     }
     else {return obNutation(mf.jCentury(date));}
@@ -129,7 +130,7 @@ export function longNutation(date: number, unix = false) {
     if (!unix) {
         const L = mf.mod(4.895064 + 628.3319663*date, 2*Math.PI);
         const Lprime = mf.mod(3.810342 + 8399.709113*date, 2*Math.PI);
-        const omega = mf.polymod(date, [2.1824386, -33.75704594, 3.61423e-5, 3.87851e-8], 2*Math.PI);
+        const omega = mf.polynomial(date, [2.1824386, -33.75704594, 3.61423e-5, 3.87851e-8], 2*Math.PI);
         return -8.34e-5*Math.sin(omega) - 6.40e-6*Math.sin(2*L) - 1.12e-6*Math.sin(2*Lprime) + 1.02e-6*Math.sin(2*omega);
     }
     else {return longNutation(mf.jCentury(date));}
@@ -203,7 +204,7 @@ export function sunHourAngle(long: number, unix: number): number {
 /**
  * Returns the sun's declination in radians. This is the latitude of the subsolar point.
  * @param long Sun's true ecliptic longitude, in radians
- * @param obliquity Obliquity of the ecliptic (i.e. Earth's axial tilt)
+ * @param obliquity Obliquity of the ecliptic (i.e. Earth's axial tilt) in radians
  */
 export function declination(long: number, obliquity: number): number {
     return Math.asin(Math.sin(obliquity)*Math.sin(long));
@@ -222,9 +223,8 @@ export function subsolarPoint(lod?: LODProfile, degrees = false): number[] {
     else {return [lat, long];}
 }
 
-/** Returns the sun's ECEF coordinates, in kilometers, at the given Unix timestamp in milliseconds. */
-export function sunEcef(unix: number): number[] {
-    const lod = generateLODProfile(unix);
+/** Returns the sun's ECEF coordinates, in kilometers, given the Unix time, longitude, obliquity, and distance (lod). */
+export function sunEcef(lod: LODProfile): number[] {
     const [sunLat, sunLong] = subsolarPoint(lod);
     return mf.toEcef(sunLat, sunLong, lod.distance);
 }
@@ -238,8 +238,7 @@ export function sunEcef(unix: number): number[] {
  * Solar elevation is not refracted. To adjust elevation angle for atmospheric refraction, use mf.refract(sunPosition[0])
  */
 export function sunPosition(lat: number, long: number, lod: LODProfile): number[] {
-    const [sunLat, sunLong] = subsolarPoint(lod);
-    return mf.elevAzimuth(lat, long, mf.latLongEcef(lat, long), mf.toEcef(sunLat, sunLong, lod.distance));
+    return mf.elevAzimuth(lat, long, sunEcef(lod));
 }
 
 /**

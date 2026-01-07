@@ -20,20 +20,20 @@ export type MoonTable = {
 }
 
 export function moonMeanLongitude(JC: number): number {
-    return mf.polymod(JC, [3.810341023, 8399.7091135216, -2.3157e-5, 3.23904e-8, -2.67713e-10], 2*Math.PI);
+    return mf.polynomial(JC, [3.810341023, 8399.7091135216, -2.3157e-5, 3.23904e-8, -2.67713e-10], 2*Math.PI);
 }
 
 export function moonMeanElongation(JC: number): number {
-    return mf.polymod(JC, [5.198466741, 7771.3771468129, -2.84489e-5, 3.19735e-8, -1.54365e-10], 2*Math.PI);
+    return mf.polynomial(JC, [5.198466741, 7771.3771468129, -2.84489e-5, 3.19735e-8, -1.54365e-10], 2*Math.PI);
 }
 
 export function moonMeanAnomaly(JC: number): number {
-    return mf.polymod(JC, [2.355555899, 8328.6914269548, 1.57027e-4, 2.50410e-7, -1.18633e-9], 2*Math.PI);
+    return mf.polynomial(JC, [2.355555899, 8328.6914269548, 1.57027e-4, 2.50410e-7, -1.18633e-9], 2*Math.PI);
 }
 
 /** Moon argument of latitude */
 export function moonArgLat(JC: number): number {
-    return mf.polymod(JC, [1.627905233, 8433.4661581307, -5.93918e-5, -4.94988e-9, 2.02167e-11], 2*Math.PI);
+    return mf.polynomial(JC, [1.627905233, 8433.4661581307, -5.93918e-5, -4.94988e-9, 2.02167e-11], 2*Math.PI);
 }
 
 /** Sum of all longitude terms in moonPtld (periodic terms for longitude and distance) */
@@ -185,7 +185,7 @@ export function moonHourAngle(longitude: number, unix: number): number {
 /** Returns the moon's position: [elevation, azimuth] in radians. Optionally, the observer's ECEF can be specified in order
  * to avoid repeatedly computing it. */
 export function moonPosition(lat: number, long: number, unix: number): number[] {
-    return mf.elevAzimuth(lat, long, mf.latLongEcef(lat, long), moonEcef(unix));
+    return mf.elevAzimuth(lat, long, moonEcef(unix));
 }
 
 /**
@@ -327,8 +327,8 @@ function phaseAngle(unix: number): number {
 }
 
 /** Returns the fraction of the Moon's disk that is illuminated. This ranges from 0 to 1.
- * Note that illumination at full moon isn't exactly 1 (except during lunar eclipses) because the moon's orbit is tilted 
- * relative to the ecliptic. Similarly, illumination at new moon is not exactly 0 except during a solar eclipse. */
+ * Note that illumination at full moon isn't exactly 1 (except during central lunar eclipses) because the moon's orbit is 
+ * tilted relative to the ecliptic. Similarly, illumination at new moon isn't exactly 0 except during a total solar eclipse. */
 export function illumination(unix: number): number {
     return (1 + Math.cos(phaseAngle(unix))) / 2;
 }

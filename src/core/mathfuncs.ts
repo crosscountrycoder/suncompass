@@ -50,31 +50,29 @@ export function clamp(x: number, min=-1, max=1) {
 /** Calculates x modulo y, where the output is in the range [0, y). */
 export function mod(x: number, y: number) {return ((x % y) + y) % y;}
 
-/** Evaluates the polynomial with given coefficients at the given x-value, using Horner's method.
- * Example: if coefficients are [2, -3.4, 5.67, -8.9], the polynomial evaluated is 2 - 3.4\*x + 5.67\*x^2 - 8.9\*x^3.
- * The degree of the polynomial is equal to coefficients.length - 1.
+/** Evaluates the polynomial with given coefficients at the given x-value.
+ * @param x The x-value to evaluate the polynomial at.
+ * @param coefficients Coefficients of the polynomial, from least to greatest degree. For example, [1.23, -4.5, 6.7, -8.9]
+ * represents the polynomial 1.23 - 4.5*x + 6.7*x^2 - 8.9*x^3.
+ * @param modulus Optional. If defined, evaluates the polynomial modulo this number.
  */
-export function polynomial(x: number, coefficients: number[]): number {
+export function polynomial(x: number, coefficients: number[], modulus?: number): number {
     let result = coefficients[coefficients.length - 1];
     for (let i = coefficients.length - 2; i >= 0; i--) {
         result = result * x + coefficients[i];
     }
-    return result;
-}
-
-/** Evaluates the polynomial modulo a specific number. */
-export function polymod(x: number, coefficients: number[], modulus: number): number {
-    return mod(polynomial(x, coefficients), modulus);
+    if (modulus === undefined || modulus === 0) {return result;}
+    else {return mod(result, modulus);}
 }
 
 /** Calculates the Julian century given the Unix timestamp in milliseconds, corrected for delta T. 
  * Note that there is a maximum error of 1 second due to the difference between UT1 and UTC, known as DUT1.
 */
 export function jCentury(unix: number) {
-    const deltaT0 = Math.round(approxDeltaT(J2000UTC) * 1000);
+    const deltaT0 = approxDeltaT(J2000UTC) * 1000;
     let epoch = J2000UTC - deltaT0;
 
-    const deltaT = Math.round(approxDeltaT(unix) * 1000) - deltaT0;
+    const deltaT = approxDeltaT(unix) * 1000 - deltaT0;
     const millis = unix - epoch + deltaT;
     return millis / 3.15576e12; // There are 3.15576e12 milliseconds in a Julian century.
 }
@@ -172,9 +170,10 @@ export function latLongEcef(lat: number, long: number): number[] {
     return [X, Y, Z];
 }
 
-/** Converts latitude, longitude, and distance (in kilometers) to rectangular ECEF coordinates.
- * @param lat Latitude, in radians
- * @param long Longitude, in radians
+/** Calculates the ECEF coordinates of an object given its subpoint lat/long in radians (such as the subsolar point for the
+ * sun) and its distance from earth in kilometers.
+ * @param lat Latitude of subpoint, in radians
+ * @param long Longitude of subpoint, in radians
  * @param dist Distance from Earth's center in kilometers.
  * @returns ECEF coordinate array: [x, y, z]
  */
@@ -184,18 +183,17 @@ export function toEcef(lat: number, long: number, dist: number): number[] {
     return [x, y, z];
 }
 
-/** Given the latitude, longitude, and ECEF of an observer, and the ECEF coordinates of a celestial object, find the
+/** Given the latitude and longitude of the observer, and the ECEF coordinates of a celestial object, find the
  * elevation and azimuth of the object.
  * @param lat Latitude of observer, in radians.
  * @param long Longitude of observer, in radians.
- * @param ecefO ECEF coordinates of observer.
  * @param ecefC ECEF coordinates of celestial object (planet, moon, star).
  * @returns [elevation, azimuth] of celestial object as seen from observer. Both are given in radians, and should be
  * multiplied by (180/pi) to convert to degrees.
  */
-export function elevAzimuth(lat: number, long: number, ecefO: number[], ecefC: number[]): number[] {
+export function elevAzimuth(lat: number, long: number, ecefC: number[]): number[] {
     const [xe, ye, ze] = ecefC; // celestial body's ECEF
-    const [xo, yo, zo] = ecefO; // observer's ECEF
+    const [xo, yo, zo] = latLongEcef(lat, long); // observer's ECEF
     const [dx, dy, dz] = [xe-xo, ye-yo, ze-zo];
 
     // rotate ECEF coordinates to local ENU (east, north, up) at observer
