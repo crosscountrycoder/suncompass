@@ -417,13 +417,9 @@ export function generateMoonSvg(options: moonSvgOptions) {
     for (const phase of moonTable.phases) {
         if (phase.type % 2 === 0) {   
             const x = phase.date;
-            const lines: mf.Point[][] = [];
-            const color = (phase.type === 0) ? "#ff0000" : "#0000ff"; // red = new moon, blue = full moon
+            const color = phase.type === 0 ? "#ff0000" : "#0000ff"; // red = new moon, blue = full moon
             for (const interval of moonTable.intervals[x]) {
-                lines.push([[x+0.5, interval[0]], [x+0.5, interval[1]]]);
-            }
-            for (const line of lines) {
-                svgString += lineSvg(line[0], line[1], color, 1, 2, true);
+                svgString += lineSvg([x+0.5, interval[0]], [x+0.5, interval[1]], color, 1, 2, true);
             }
         }
     }

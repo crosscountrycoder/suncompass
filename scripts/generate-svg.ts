@@ -26,14 +26,14 @@ else if (Math.abs(long) > 180) {
 const timeZone = find(lat, long)[0];
 
 /** If year is specified, set the year to what is given. Otherwise, set to current year in given location. */
-const year = (args.length >= 5) ? Number(args[4]) : DateTime.now().setZone(timeZone).year;
+const year = args.length >= 5 ? Number(args[4]) : DateTime.now().setZone(timeZone).year;
 
 const daylengthFileName = 
-(args.length === 6) ? `./diagrams/${args[5]}-day-lengths-${year}.svg` : `./diagrams/day-lengths.svg`;
+args.length === 6 ? `./diagrams/${args[5]}-day-lengths-${year}.svg` : `./diagrams/day-lengths.svg`;
 const risesetFileName = 
-(args.length === 6) ? `./diagrams/${args[5]}-sunrise-sunset-${year}.svg` : `./diagrams/sunrise-sunset.svg`;
+args.length === 6 ? `./diagrams/${args[5]}-sunrise-sunset-${year}.svg` : `./diagrams/sunrise-sunset.svg`;
 const moonFileName =
-(args.length === 6) ? `./diagrams/${args[5]}-moon-${year}.svg` : `./diagrams/moon.svg`;
+args.length === 6 ? `./diagrams/${args[5]}-moon-${year}.svg` : `./diagrams/moon.svg`;
 
 const sunTable = generateSunTable(lat, long, year, timeZone);
 

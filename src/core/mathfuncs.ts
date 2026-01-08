@@ -17,7 +17,7 @@ function fractionalYear(t: number) {
 /** Adjusts the given elevation angle (elev) of a celestial object to account for atmospheric refraction. Both the input
  * and the returned value are in radians. */
 export function refract(elev: number): number {
-    const refraction = (elev <= HORIZON) ? 
+    const refraction = elev <= HORIZON ? 
     -1.569584402829295e-4/Math.tan(elev) : 
     2.96706e-4/Math.tan(elev + 0.00313756/(0.0891863 + elev)) + 5.608094753118464e-7;
     return elev + refraction;
@@ -70,7 +70,6 @@ export function polynomial(x: number, coefficients: number[], modulus?: number):
 export function jCentury(unix: number) {
     const deltaT0 = approxDeltaT(J2000UTC) * 1000;
     let epoch = J2000UTC - deltaT0;
-
     const deltaT = approxDeltaT(unix) * 1000 - deltaT0;
     const millis = unix - epoch + deltaT;
     return millis / 3.15576e12; // There are 3.15576e12 milliseconds in a Julian century.
@@ -119,7 +118,7 @@ export function quadraticZero(x0: number, y0: number, x1: number, y1: number, x2
         else {
             const sol1 = (Math.sqrt(disc) - b) / (2 * a);
             const sol2 = (-Math.sqrt(disc) - b) / (2 * a);
-            const solution = (Math.abs(sol1 - 0.5) <= Math.abs(sol2 - 0.5)) ? sol1 : sol2;
+            const solution = Math.abs(sol1 - 0.5) <= Math.abs(sol2 - 0.5) ? sol1 : sol2;
             return clamp(x0 + solution * (x2 - x0), x0, x2);
         }
     }
@@ -153,10 +152,8 @@ export function toFixedS(n: number, precision: number) {
 /** Rotate x, y, z around z-axis by theta radians using right hand rule.
  * Used to convert ECI coordinates to ECEF, by rotating by -sc.gast(). Returns an array [x, y, z] */
 export function rotateZ(x: number, y: number, z: number, theta: number) {
-    const [cosT, sinT] = [Math.cos(theta), Math.sin(theta)];
-    const x2 = x * cosT - y * sinT;
-    const y2 = x * sinT + y * cosT;
-    return [x2, y2, z];
+    const cosT = Math.cos(theta), sinT = Math.sin(theta);
+    return [x*cosT-y*sinT, x*sinT+y*cosT, z];
 }
 
 /** Converts latitude and longitude in radians to rectangular ECEF coordinates in km: [x, y, z]. */
@@ -164,8 +161,7 @@ export function latLongEcef(lat: number, long: number): number[] {
     const e2 = 1 - (earthPRadius / earthERadius) ** 2;
     const [sinLat, cosLat, sinLong, cosLong] = [Math.sin(lat),Math.cos(lat),Math.sin(long),Math.cos(long)];
     const N = earthERadius / Math.sqrt(1 - e2 * sinLat**2); // radius of curvature in prime vertical
-    const [X, Y, Z] = [N*cosLat*cosLong, N*cosLat*sinLong, N*(1-e2)*sinLat]; // observer's ECEF coords
-    return [X, Y, Z];
+    return [N*cosLat*cosLong, N*cosLat*sinLong, N*(1-e2)*sinLat]; // observer's ECEF coords
 }
 
 /** Calculates the ECEF coordinates of an object given its subpoint lat/long in radians (such as the subsolar point for the
@@ -177,8 +173,7 @@ export function latLongEcef(lat: number, long: number): number[] {
  */
 export function toEcef(lat: number, long: number, dist: number): number[] {
     const [cosLat, sinLat, cosLong, sinLong] = [Math.cos(lat), Math.sin(lat), Math.cos(long), Math.sin(long)];
-    const [x, y, z] = [dist*cosLat*cosLong, dist*cosLat*sinLong, dist*sinLat];
-    return [x, y, z];
+    return [dist*cosLat*cosLong, dist*cosLat*sinLong, dist*sinLat];
 }
 
 /** Given the latitude and longitude of the observer, and the ECEF coordinates of a celestial object, find the
@@ -241,7 +236,7 @@ export function subpoint(ecef: number[]): number[] {
 
     const p = Math.hypot(x, y);
     if (p === 0) { // poles - longitude arbitrary so we use 0
-        return [(z >= 0) ? Math.PI/2 : -Math.PI/2, 0];
+        return [z >= 0 ? Math.PI/2 : -Math.PI/2, 0];
     }
 
     const lon = Math.atan2(y, x);

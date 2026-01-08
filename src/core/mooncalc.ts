@@ -149,7 +149,7 @@ export function moonDistanceDeriv(date: number, unix = false) {
 
 /** Returns the rectangular coordinates [x, y, z] in Earth-centered, Earth-fixed coordinates (ECEF) in kilometers. */
 export function moonEcef(unix: number): number[] {
-    let [eLat, eLong] = moonLatLong(unix, true);
+    const [eLat, eLong] = moonLatLong(unix, true);
     const ob = sc.obliquity(unix, true);
     const [sinB,cosB,sinL,cosL,sinE,cosE] = [Math.sin(eLat),Math.cos(eLat),Math.sin(eLong),Math.cos(eLong),Math.sin(ob),Math.cos(ob)];
     
@@ -160,8 +160,7 @@ export function moonEcef(unix: number): number[] {
     const zeci = dist * (cosB * sinL * sinE + sinB * cosE);
 
     // Convert to ECEF coordinates
-    const rectCoords = mf.rotateZ(xeci, yeci, zeci, -sc.gast(unix));
-    return rectCoords;
+    return mf.rotateZ(xeci, yeci, zeci, -sc.gast(unix));
 }
 
 /** Returns the sublunar point [latitude, longitude].
@@ -207,9 +206,7 @@ SEvent[] {
 
 /** Approximate derivative of the moon's position in radians per second. */
 export function moonDerivative(lat: number, long: number, unix: number): number {
-    const t0 = unix - 500, t1 = unix + 500;
-    const e0 = moonPosition(lat, long, t0)[0], e1 = moonPosition(lat, long, t1)[0];
-    return e1 - e0;
+    return moonPosition(lat, long, unix + 500)[0] - moonPosition(lat, long, unix - 500)[0];
 }
 
 /**
@@ -315,8 +312,7 @@ function phaseAngle(unix: number): number {
     const dot = sunVector[0] * moonVector[0] + sunVector[1] * moonVector[1] + sunVector[2] * moonVector[2];
     const normSun = Math.hypot(sunVector[0], sunVector[1], sunVector[2]);
     const normMoon = Math.hypot(moonVector[0], moonVector[1], moonVector[2]);
-    const i = Math.acos(mf.clamp(dot / (normSun * normMoon)));
-    return i;
+    return Math.acos(mf.clamp(dot / (normSun * normMoon)));
 }
 
 /** Returns the fraction of the Moon's disk that is illuminated. This ranges from 0 to 1.
@@ -374,10 +370,10 @@ export function moonPhase(lat: number, long: number, start: number, end: number)
  */
 export function moonPhaseDay(start: number, end: number): string {
     const diff0 = moonSunLongDiff(start), diff1 = moonSunLongDiff(end);
-    if (diff0 <= 0.5*Math.PI) {return (diff1 >= 0.5*Math.PI) ? "First Quarter" : "Waxing Crescent";}
-    else if (diff0 <= Math.PI) {return (diff1 >= Math.PI) ? "Full Moon" : "Waxing Gibbous";}
-    else if (diff0 <= 1.5*Math.PI) {return (diff1 >= 1.5*Math.PI) ? "Last Quarter" : "Waning Gibbous";}
-    else {return (diff1 < diff0) ? "New Moon" : "Waning Crescent";}
+    if (diff0 <= 0.5*Math.PI) {return diff1 >= 0.5*Math.PI ? "First Quarter" : "Waxing Crescent";}
+    else if (diff0 <= Math.PI) {return diff1 >= Math.PI ? "Full Moon" : "Waxing Gibbous";}
+    else if (diff0 <= 1.5*Math.PI) {return diff1 >= 1.5*Math.PI ? "Last Quarter" : "Waning Gibbous";}
+    else {return diff1 < diff0 ? "New Moon" : "Waning Crescent";}
 }
 
 /** Returns the moon's apsides (perigees and apogees) during a multi-day period, starting with start and ending with
