@@ -1,12 +1,11 @@
-/* 
-The formulas for earth-sun distance, axial tilt, declination, equation of time, and atmospheric refraction of sunlight are 
-borrowed from the book "Astronomical Algorithms" by Jean Meeus. The refraction formula is modified slightly to ensure continuity 
-when the sun is below the horizon. The formula for solar ecliptic longitude is from the book "Planetary Programs and Tables from 
--4000 to +2800" by Pierre Bretagnon and Jean-Louis Simon.
+/* The formulas for axial tilt, declination, equation of time, and atmospheric refraction of sunlight are borrowed from the book 
+"Astronomical Algorithms" by Jean Meeus. The refraction formula is modified slightly to ensure continuity when the sun is below 
+the horizon. The formulas for earth-sun distance and solar ecliptic longitude are from the book "Planetary Programs and Tables 
+from -4000 to +2800" by Pierre Bretagnon and Jean-Louis Simon.
 
 The subsolar point is calculated using the declination and equation of time, treating UTC as equivalent to UT1 (mean solar time 
 at 0 degrees longitude), the two are always within 0.9 seconds of each other. Solar noon and midnight are calculated using the 
-equation of time. The position of the sun is calculated from the subsolar point through spherical trigonometry.
+equation of time. The position of the sun is calculated from the subsolar point and distance through spherical trigonometry.
 
 For the purposes of this calculator, daytime is defined as the period in which the solar elevation angle is greater than -50 
 arcminutes (-5/6 degrees, or -0.1454 radians). This accounts for the sun's angular radius in the sky and refraction of sunlight.
@@ -14,8 +13,7 @@ It corresponds to the definition used by most sources, including NOAA's solar ca
 
 This site uses the Luxon library to deal with date/time computations. Luxon is used to simplify computation when dealing with
 durations, conversion between different time zones, and complexities such as daylight saving time. The geo-tz library is used 
-to find the time zone of a geographic coordinate.
-*/
+to find the time zone of a geographic coordinate. */
 
 import * as mf from "./mathfuncs.ts";
 import {degToRad, sunPeriodicTerms, DAY_LENGTH, BSEARCH_GAP, HORIZON, CIVIL_TWILIGHT, NAUTICAL_TWILIGHT, ASTRO_TWILIGHT} from "./constants.ts";
@@ -62,7 +60,7 @@ export function sunGeomLong(date: number, unix = false): number {
     else {return sunGeomLong(mf.jCentury(date));}
 }
 
-/** Formula 45.3, in page 308 of Astronomical Algorithms. The value returned is in radians */
+/** Formula 45.3, in page 308 of Astronomical Algorithms. The value returned is in radians. */
 export function meanSunAnomaly(JC: number): number {
     return mf.polynomial(JC, [6.240060127, 628.3019551672, -2.68083e-6, 7.1267e-10], 2*Math.PI);
 }
@@ -219,8 +217,7 @@ export function declination(long: number, obliquity: number): number {
 export function subsolarPoint(lod?: LODProfile, degrees = false): number[] {
     if (lod === undefined) {lod = generateLODProfile(Date.now());}
     const lat = declination(lod.longitude, lod.obliquity), long = -sunHourAngle(0, lod.unix);
-    if (degrees) {return [mf.clamp(lat/degToRad,-90,90), mf.mod(long/degToRad+180,360)-180];}
-    else {return [lat, long];}
+    return degrees ? [lat / degToRad, long / degToRad] : [lat, long];
 }
 
 /** Returns the sun's ECEF coordinates, in kilometers, given the Unix time, longitude, obliquity, and distance (lod). */
@@ -293,7 +290,7 @@ export function derivative(lat: number, long: number, unix: number, startLOD: LO
  * @param end End of day (LOD profile)
  * @returns Unix timestamps at which sun reaches relative min or max altitude, along with both the start and end of the day.
  */
-export function maxAndMin(lat: number, long: number, start: LODProfile, end: LODProfile): number[] {
+function maxAndMin(lat: number, long: number, start: LODProfile, end: LODProfile): number[] {
     const startTime = start.unix, endTime = end.unix;
     const times = [startTime];
     const interval = (endTime - startTime) / 6;
@@ -329,8 +326,7 @@ export function maxAndMin(lat: number, long: number, start: LODProfile, end: LOD
  * @returns SEvent object, which includes a DateTime, the sun's elevation & azimuth and a tag for the type of dawn/sunrise.
  */
 export function dawn(lat: number, long: number, angle: number, type: string, maxMin: number[], 
-    startLOD: LODProfile, endLOD: LODProfile
-): SEvent[] {
+    startLOD: LODProfile, endLOD: LODProfile): SEvent[] {
     const dawnTimes = [];
     for (let i=0; i<maxMin.length-1; i++) {
         let t0 = maxMin[i], t1 = maxMin[i+1];
@@ -366,8 +362,7 @@ export function dawn(lat: number, long: number, angle: number, type: string, max
  * @returns SEvent object, which includes a DateTime, the sun's elevation & azimuth and a tag for the type of dusk/sunset.
  */
 export function dusk(lat: number, long: number, angle: number, type: string, maxMin: number[],
-    startLOD: LODProfile, endLOD: LODProfile
-): SEvent[] {
+    startLOD: LODProfile, endLOD: LODProfile): SEvent[] {
     const duskTimes = [];
     for (let i=0; i<maxMin.length-1; i++) {
         let t0 = maxMin[i], t1 = maxMin[i+1];
@@ -500,13 +495,13 @@ export function calcSolstEq(year: number, month: 3 | 6 | 9 | 12) {
  * Aphelion is when the earth is furthest from the sun, and perihelion is when it is closest. */
 export function sunApsides(start: number, end: number) {
     const interval = (end - start) / 12;
-    const window = 3.6e6; // 1 hour
+    const window = 3.6e6; // 1-hour window for linear interpolation of derivative
     const aphelion: number[] = [];
     const perihelion: number[] = [];
     for (let t = start; t < end; t += interval) {
         let t0 = t, t1 = Math.min(t + interval, end);
         let d0 = sunDistanceDerivative(t0), d1 = sunDistanceDerivative(t1);
-        if (d0 === 0) {((d1 > 0) ? perihelion : aphelion).push(t0);}
+        if (d0 === 0) {(d1 > 0 ? perihelion : aphelion).push(Math.floor(t0));}
         else if (d0 * d1 < 0) {
             while (t1 - t0 > window) {
                 const tAvg = (t0 + t1) / 2;
@@ -515,7 +510,7 @@ export function sunApsides(start: number, end: number) {
                 else {t1 = tAvg; d1 = dAvg;}
             }
             const tApsis = Math.floor(t0 + (d0 / (d0 - d1)) * (t1 - t0)); // linear interpolation of derivative
-            ((d1 > 0) ? perihelion : aphelion).push(tApsis);
+            (d1 > 0 ? perihelion : aphelion).push(tApsis);
         }
     }
     return {aphelion: aphelion, perihelion: perihelion}
@@ -615,29 +610,17 @@ export function intervalsSvg(sunEvents: SEvent[], timeZone: TimeChange[]): numbe
     if (etype === "Astro Dawn") {
         aIntervals.push([s, 86400]);
     } else if (etype === "Nautical Dawn") {
-        aIntervals.push([0, 86400]);
-        nIntervals.push([s, 86400]);
+        aIntervals.push([0, 86400]); nIntervals.push([s, 86400]);
     } else if (etype === "Civil Dawn") {
-        aIntervals.push([0, 86400]);
-        nIntervals.push([0, 86400]);
-        cIntervals.push([s, 86400]);
+        aIntervals.push([0, 86400]); nIntervals.push([0, 86400]); cIntervals.push([s, 86400]);
     } else if (etype === "Sunrise") {
-        aIntervals.push([0, 86400]);
-        nIntervals.push([0, 86400]);
-        cIntervals.push([0, 86400]);
-        dIntervals.push([s, 86400]);
+        aIntervals.push([0, 86400]); nIntervals.push([0, 86400]); cIntervals.push([0, 86400]); dIntervals.push([s, 86400]);
     } else if (etype === "Sunset") {
-        aIntervals.push([0, 86400]);
-        nIntervals.push([0, 86400]);
-        cIntervals.push([0, 86400]);
-        dIntervals.push([0, s]);
+        aIntervals.push([0, 86400]); nIntervals.push([0, 86400]); cIntervals.push([0, 86400]); dIntervals.push([0, s]);
     } else if (etype === "Civil Dusk") {
-        aIntervals.push([0, 86400]);
-        nIntervals.push([0, 86400]);
-        cIntervals.push([0, s]);
+        aIntervals.push([0, 86400]); nIntervals.push([0, 86400]); cIntervals.push([0, s]);
     } else if (etype === "Nautical Dusk") {
-        aIntervals.push([0, 86400]);
-        nIntervals.push([0, s]);
+        aIntervals.push([0, 86400]); nIntervals.push([0, s]);
     } else if (etype === "Astro Dusk") {
         aIntervals.push([0, s]);
     }
@@ -677,14 +660,11 @@ export function intervalsNightCivilTwilight(sunEvents: SEvent[], timeZone: TimeC
     if (etype === "Civil Dawn") {
         nIntervals.push([0, s]);
         cIntervals.push([s, 86400]);
-    }
-    else if (etype === "Sunrise") {
+    } else if (etype === "Sunrise") {
         cIntervals.push([0, s]);
-    }
-    else if (etype === "Sunset") {
+    } else if (etype === "Sunset") {
         cIntervals.push([s, 86400]);
-    }
-    else if (etype === "Civil Dusk") {
+    } else if (etype === "Civil Dusk") {
         cIntervals.push([0, s]);
         nIntervals.push([s, 86400]);
     }
@@ -695,14 +675,11 @@ export function intervalsNightCivilTwilight(sunEvents: SEvent[], timeZone: TimeC
         if (etype === "Civil Dawn") {
             nIntervals[nIntervals.length-1][1] = s;
             cIntervals.push([s, 86400]);
-        }
-        else if (etype === "Sunrise") {
+        } else if (etype === "Sunrise") {
             cIntervals[cIntervals.length-1][1] = s;
-        }
-        else if (etype === "Sunset") {
+        } else if (etype === "Sunset") {
             cIntervals.push([s, 86400]);
-        }
-        else if (etype === "Civil Dusk") {
+        } else if (etype === "Civil Dusk") {
             cIntervals[cIntervals.length-1][1] = s;
             nIntervals.push([s, 86400]);
         }
@@ -767,8 +744,8 @@ export function lengths(sunEvents: SEvent[], timeZone: TimeChange[]): number[] {
 /** Generate an object containing sunrise, sunset, twilight, solar noon and solar midnight times, day lengths,
  * solstices and equinoxes (grouped under "solstices"), perihelion, aphelion, and the time zone lookup table for
  * the given zone in the given year.
- * Note that latitude and longitude are given in degrees here, not radians, because they are treated as geographic coordinates
- * rather than angles.
+ * Note that latitude and longitude are given in degrees here, not radians, because they are treated as geographic 
+ * coordinates rather than angles. They are converted to radians for calculation.
  */
 export function generateSunTable(lat: number, long: number, year: number, zone: string): SunTable {
     lat *= degToRad; long *= degToRad;

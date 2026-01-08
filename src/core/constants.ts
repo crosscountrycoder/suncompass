@@ -6,10 +6,16 @@
 */
 export const degToRad = Math.PI/180;
 
-/** Solar elevation thresholds for sunrise/sunset (HORIZON), civil, nautical and astronomical twilight. */
+/** Elevation threshold for sunrise, sunset, moonrise, and moonset. Equal to -5*pi/1080 rad or -5/6 degrees. */
 export const HORIZON = (-5/6) * degToRad;
+
+/** Solar elevation threshold for civil twilight. Equal to -pi/30 rad or -6 degrees. */
 export const CIVIL_TWILIGHT = -6 * degToRad;
+
+/** Solar elevation threshold for nautical twilight. Equal to -pi/15 rad or -12 degrees. */
 export const NAUTICAL_TWILIGHT = -12 * degToRad;
+
+/** Solar elevation threshold for astronomical twilight. Equal to -pi/10 rad or -18 degrees. */
 export const ASTRO_TWILIGHT = -18 * degToRad;
 
 /** Earth's equatorial radius in kilometers (WGS84 ellipsoid) */

@@ -128,10 +128,8 @@ function deltaB(JC: number): number {
  * both measured in radians. */
 export function moonLatLong(date: number, unix = false): number[] {
     if (!unix) {
-        let long = moonMeanLongitude(date) + l(date) + deltaL(date) + sc.longNutation(date);
-        let lat = b(date) + deltaB(date);
-        lat = mf.clamp(lat, -Math.PI/2, Math.PI/2);
-        long = mf.mod(long, 2*Math.PI);
+        const lat = mf.clamp(b(date) + deltaB(date), -Math.PI/2, Math.PI/2);
+        const long = mf.mod(moonMeanLongitude(date) + l(date) + deltaL(date) + sc.longNutation(date), 2*Math.PI);
         return [lat, long];
     }
     else {return moonLatLong(mf.jCentury(date));}
@@ -172,8 +170,7 @@ export function moonEcef(unix: number): number[] {
  */
 export function sublunarPoint(unix: number, degrees = false): number[] {
     const [lat, long] = mf.subpoint(moonEcef(unix));
-    if (degrees) {return [mf.clamp(lat/degToRad,-90,90), mf.mod(long/degToRad+180,360)-180];}
-    else {return [lat, long];}
+    return degrees ? [lat / degToRad, long / degToRad] : [lat, long];
 }
 
 /** The hour angle of the moon at the given longitude and Unix timestamp, in radians between -pi and pi. 
@@ -224,7 +221,7 @@ export function moonDerivative(lat: number, long: number, unix: number): number 
  * @param end End of day, Unix milliseconds
  * @returns An array of Unix times, including the start of the day, all extrema in lunar elevation, and the start of the next day.
  */
-export function moonMaxMin(lat: number, long: number, start: number, end: number): number[] {
+function moonMaxMin(lat: number, long: number, start: number, end: number): number[] {
     const times = [start];
     const interval = (end - start) / 6;
     for (let t = start; t < end; t += interval) {
@@ -258,8 +255,7 @@ export function moonrise(lat: number, long: number, maxMin: number[], angle: num
     const riseTimes = [];
     for (let i=0; i<maxMin.length-1; i++) {
         let t0 = maxMin[i], t1 = maxMin[i+1];
-        let e0 = moonPosition(lat, long, t0)[0];
-        let e1 = moonPosition(lat, long, t1)[0];
+        let e0 = moonPosition(lat, long, t0)[0], e1 = moonPosition(lat, long, t1)[0];
         if (e0 <= angle && e1 >= angle) {
             while (t1 - t0 > BSEARCH_GAP) {
                 const tAvg = (t0+t1)/2;
@@ -289,8 +285,7 @@ export function moonset(lat: number, long: number, maxMin: number[], angle: numb
     const setTimes = [];
     for (let i=0; i<maxMin.length-1; i++) {
         let t0 = maxMin[i], t1 = maxMin[i+1];
-        let e0 = moonPosition(lat, long, t0)[0];
-        let e1 = moonPosition(lat, long, t1)[0];
+        let e0 = moonPosition(lat, long, t0)[0], e1 = moonPosition(lat, long, t1)[0];
         if (e0 >= angle && e1 <= angle) {
             while (t1 - t0 > BSEARCH_GAP) {
                 const tAvg = (t0+t1)/2;
@@ -312,9 +307,7 @@ export function moonset(lat: number, long: number, maxMin: number[], angle: numb
  * The value returned is the same as the phase angle i in Astronomical Algorithms, chapter 46. It is the angle between the
  * sun-moon and earth-moon vectors. */
 function phaseAngle(unix: number): number {
-    const lodProfile = generateLODProfile(unix);
-    const [subsolarLat, subsolarLong] = sc.subsolarPoint(lodProfile);
-    const ecefSun = mf.toEcef(subsolarLat, subsolarLong, lodProfile.distance);
+    const ecefSun = sc.sunEcef(generateLODProfile(unix));
     const ecefMoon = moonEcef(unix);
     const sunVector = [ecefSun[0]-ecefMoon[0], ecefSun[1]-ecefMoon[1], ecefSun[2]-ecefMoon[2]];
     const moonVector = [-ecefMoon[0], -ecefMoon[1], -ecefMoon[2]];
@@ -328,7 +321,8 @@ function phaseAngle(unix: number): number {
 
 /** Returns the fraction of the Moon's disk that is illuminated. This ranges from 0 to 1.
  * Note that illumination at full moon isn't exactly 1 (except during central lunar eclipses) because the moon's orbit is 
- * tilted relative to the ecliptic. Similarly, illumination at new moon isn't exactly 0 except during a total solar eclipse. */
+ * tilted relative to the ecliptic. Similarly, illumination at new moon isn't exactly 0 except during a total or annular 
+ * solar eclipse. */
 export function illumination(unix: number): number {
     return (1 + Math.cos(phaseAngle(unix))) / 2;
 }
@@ -350,55 +344,23 @@ export function moonSunLongDiff(unix: number): number {
  * Otherwise, returns null.
  */
 export function moonPhase(lat: number, long: number, start: number, end: number): SEvent | null {
-    let p0 = moonSunLongDiff(start), p1 = moonSunLongDiff(end);
+    const phaseNames = ["New Moon", "First Quarter", "Full Moon", "Last Quarter"];
+    let p0 = moonSunLongDiff(start), p1 = moonSunLongDiff(end); // longitude differences betweeen sun and moon
     let t0 = start, t1 = end;
-    if (p1 < p0) { // new moon
+    if (p0 > p1) {p0 -= 2*Math.PI;}
+    const i0 = Math.floor(2 * p0 / Math.PI), i1 = Math.floor(2 * p1 / Math.PI);
+    if (i0 !== i1) { // if the longitude-difference angle crosses a multiple of pi/2 during the day
+        const thresh = i1 * Math.PI / 2;
         while (t1 - t0 > BSEARCH_GAP) {
-            const tAvg = (t0+t1)/2;
-            const pAvg = moonSunLongDiff(tAvg);
-            if (pAvg > Math.PI) {t0 = tAvg; p0 = pAvg;}
+            const tAvg = (t0 + t1) / 2;
+            let pAvg = mf.mod(moonSunLongDiff(tAvg) - p0, 2*Math.PI) + p0;
+            if (pAvg <= thresh) {t0 = tAvg; p0 = pAvg;}
             else {t1 = tAvg; p1 = pAvg;}
         }
-        const frac = (2*Math.PI - p0) / (p1 - p0 + 2*Math.PI);
+        const frac = (thresh - p0) / (p1 - p0);
         const t = Math.floor(t0 + frac * (t1 - t0));
         const [e, a] = moonPosition(lat, long, t);
-        return {unix: t, type: "New Moon", elev: e, azimuth: a};
-    }
-    else if (p0 <= 0.5*Math.PI && p1 >= 0.5*Math.PI) { // first quarter
-        while (t1 - t0 > BSEARCH_GAP) {
-            const tAvg = (t0+t1)/2;
-            const pAvg = moonSunLongDiff(tAvg);
-            if (pAvg <= 0.5*Math.PI) {t0 = tAvg; p0 = pAvg;}
-            else {t1 = tAvg; p1 = pAvg;}
-        }
-        const frac = (0.5*Math.PI - p0) / (p1 - p0);
-        const t = Math.floor(t0 + frac * (t1 - t0));
-        const [e, a] = moonPosition(lat, long, t);
-        return {unix: t, type: "First Quarter", elev: e, azimuth: a};
-    }
-    else if (p0 <= Math.PI && p1 >= Math.PI) { // full moon
-        while (t1 - t0 > BSEARCH_GAP) {
-            const tAvg = (t0+t1)/2;
-            const pAvg = moonSunLongDiff(tAvg);
-            if (pAvg <= Math.PI) {t0 = tAvg; p0 = pAvg;}
-            else {t1 = tAvg; p1 = pAvg;}
-        }
-        const frac = (Math.PI - p0) / (p1 - p0);
-        const t = Math.floor(t0 + frac * (t1 - t0));
-        const [e, a] = moonPosition(lat, long, t);
-        return {unix: t, type: "Full Moon", elev: e, azimuth: a};
-    }
-    else if (p0 <= 1.5*Math.PI && p1 >= 1.5*Math.PI) { // last quarter
-        while (t1 - t0 > BSEARCH_GAP) {
-            const tAvg = (t0+t1)/2;
-            const pAvg = moonSunLongDiff(tAvg);
-            if (pAvg <= 1.5*Math.PI) {t0 = tAvg; p0 = pAvg;}
-            else {t1 = tAvg; p1 = pAvg;}
-        }
-        const frac = (1.5*Math.PI - p0) / (p1 - p0);
-        const t = Math.floor(t0 + frac * (t1 - t0));
-        const [e, a] = moonPosition(lat, long, t);
-        return {unix: t, type: "Last Quarter", elev: e, azimuth: a};
+        return {unix: t, type: phaseNames[i1], elev: e, azimuth: a}; 
     }
     else {return null;}
 }
@@ -411,38 +373,11 @@ export function moonPhase(lat: number, long: number, start: number, end: number)
  * "Waning Gibbous", "Last Quarter", or "Waning Crescent".
  */
 export function moonPhaseDay(start: number, end: number): string {
-    const diff0 = moonSunLongDiff(start);
-    const diff1 = moonSunLongDiff(end);
+    const diff0 = moonSunLongDiff(start), diff1 = moonSunLongDiff(end);
     if (diff0 <= 0.5*Math.PI) {return (diff1 >= 0.5*Math.PI) ? "First Quarter" : "Waxing Crescent";}
     else if (diff0 <= Math.PI) {return (diff1 >= Math.PI) ? "Full Moon" : "Waxing Gibbous";}
     else if (diff0 <= 1.5*Math.PI) {return (diff1 >= 1.5*Math.PI) ? "Last Quarter" : "Waning Gibbous";}
     else {return (diff1 < diff0) ? "New Moon" : "Waning Crescent";}
-}
-
-/**
- * Returns the moon's apsides (perigee or apogee) on a given day.
- * @param start Start of the day in Unix milliseconds
- * @param end End of the day in Unix milliseconds
- * @returns An object with the time of the event (in Unix milliseconds) and the type (perigee or apogee).
- * Perigee occurs when the moon is closest to earth, apogee is when the moon is furthest from earth.
- */
-export function moonApsis(start: number, end: number) {
-    const window = 6e5; // 10 minutes
-    let t0 = start, t1 = end;
-    let d0 = moonDistanceDeriv(t0, true), d1 = moonDistanceDeriv(t1, true);
-    const type = ((d1 > 0) ? "Perigee" : "Apogee");
-    if (d0 === 0) {return {time: t0, type: type};}
-    else if (d0 * d1 < 0) { // sign change in derivative
-        while (t1 - t0 > window) {
-            const tAvg = (t0 + t1) / 2;
-            const dAvg = moonDistanceDeriv(tAvg, true);
-            if (d1 * dAvg <= 0) {t0 = tAvg; d0 = dAvg;}
-            else {t1 = tAvg; d1 = dAvg;}
-        }
-        const tApsis = Math.floor(t0 + (d0 / (d0 - d1)) * (t1 - t0));
-        return {time: tApsis, type: type};
-    }
-    else {return null;}
 }
 
 /** Returns the moon's apsides (perigees and apogees) during a multi-day period, starting with start and ending with
@@ -450,10 +385,18 @@ export function moonApsis(start: number, end: number) {
 export function moonApsides(start: number, end: number) {
     const perigees: number[] = [], apogees: number[] = [];
     for (let t = start; t < end; t += DAY_LENGTH) {
-        const ma = moonApsis(t, Math.min(t + DAY_LENGTH, end));
-        if (ma !== null) {
-            if (ma.type === "Perigee") {perigees.push(ma.time);}
-            else if (ma.type === "Apogee") {apogees.push(ma.time);}
+        let t0 = t, t1 = Math.min(t + DAY_LENGTH, end);
+        let d0 = moonDistanceDeriv(t0, true), d1 = moonDistanceDeriv(t1, true);
+        if (d0 === 0) {(d1 > 0 ? perigees : apogees).push(Math.floor(t0));}
+        else if (d0 * d1 < 0) { // sign change in derivative
+            while (t1 - t0 > 6e5) { // 6e5 refers to 10-minute window
+                const tAvg = (t0 + t1) / 2;
+                const dAvg = moonDistanceDeriv(tAvg, true);
+                if (d1 * dAvg <= 0) {t0 = tAvg; d0 = dAvg;}
+                else {t1 = tAvg; d1 = dAvg;}
+            }
+            const apsis = Math.floor(t0 + (d0 / (d0 - d1)) * (t1 - t0));
+            (d1 > 0 ? perigees : apogees).push(apsis);
         }
     }
     return {apogees: apogees, perigees: perigees};
@@ -474,17 +417,17 @@ export function allMoonEvents(lat: number, long: number, start: number, end: num
 
 /** Variant of allMoonEvents, but with a DateTime object as input rather than start/end Unix times. 
  * Note that here, latitude and longitude are given in degrees, not radians, as they are treated as geographical coordinates
- * rather than angles.
-*/
+ * rather than angles. They are converted to radians for calculation. */
 export function moonEventsDay(lat: number, long: number, date: DateTime): SEvent[] {
-    lat *= degToRad; long *= degToRad;
     const dayStart = mf.ms(date.startOf("day"));
     const dayEnd = mf.ms(date.startOf("day").plus({days: 1}));
-    return allMoonEvents(lat, long, dayStart, dayEnd);
+    return allMoonEvents(lat * degToRad, long * degToRad, dayStart, dayEnd);
 }
 
 /** Returns the intervals during the day in which the moon is above the horizon. */
 export function moonIntervals(lat: number, long: number, dayStart: number, events: SEvent[], timeZone: TimeChange[]): number[][] {
+    function timeOfDayS(event: SEvent, zone: TimeChange[]) {return Math.floor(getTimeOfDay(event.unix,zone)/1000);}
+
     const newMoonEvents: SEvent[] = [];
     for (const event of events) {
         if (event.type === "Moonrise" || event.type === "Moonset") {newMoonEvents.push(event);}
@@ -493,34 +436,13 @@ export function moonIntervals(lat: number, long: number, dayStart: number, event
         if (moonPosition(lat, long, dayStart)[0] >= HORIZON) {return [[0, 86400]];} // up all day
         else {return [];} // down all day
     }
-    else if (newMoonEvents[0].type === "Moonrise") {
-        if (newMoonEvents.length === 1) {
-            return [[Math.floor(getTimeOfDay(newMoonEvents[0].unix, timeZone)/1000), 86400]];
-        } else if (newMoonEvents.length === 2) {
-            return [[Math.floor(getTimeOfDay(newMoonEvents[0].unix, timeZone)/1000), 
-            Math.floor(getTimeOfDay(newMoonEvents[1].unix, timeZone)/1000)]];
-        } else if (newMoonEvents.length === 3) {
-            return [[Math.floor(getTimeOfDay(newMoonEvents[0].unix, timeZone)/1000), Math.floor(getTimeOfDay(newMoonEvents[1].unix, timeZone)/1000)],
-                [Math.floor(getTimeOfDay(newMoonEvents[2].unix, timeZone)/1000), 86400]];
-        } else {
-            return [[Math.floor(getTimeOfDay(newMoonEvents[0].unix, timeZone)/1000), Math.floor(getTimeOfDay(newMoonEvents[1].unix, timeZone)/1000)],
-                [Math.floor(getTimeOfDay(newMoonEvents[2].unix, timeZone)/1000), Math.floor(getTimeOfDay(newMoonEvents[3].unix, timeZone)/1000)]];
+    else {
+        const intervals = (newMoonEvents[0].type === "Moonrise") ? [] : [[0, 86400]];
+        for (let i=0; i<newMoonEvents.length; i++) {
+            if (newMoonEvents[i].type === "Moonrise") {intervals.push([timeOfDayS(newMoonEvents[i], timeZone), 86400]);} 
+            else {intervals[intervals.length-1][1] = timeOfDayS(newMoonEvents[i], timeZone);}
         }
-    }
-    else { // if (newMoonEvents[0].type === "Moonset")
-        if (newMoonEvents.length === 1) {
-            return [[0, Math.floor(getTimeOfDay(newMoonEvents[0].unix, timeZone)/1000)]];
-        } else if (newMoonEvents.length === 2) {
-            return [[0, Math.floor(getTimeOfDay(newMoonEvents[0].unix, timeZone)/1000)], 
-                [Math.floor(getTimeOfDay(newMoonEvents[1].unix, timeZone)/1000), 86400]];
-        } else if (newMoonEvents.length === 3) {
-            return [[0, Math.floor(getTimeOfDay(newMoonEvents[0].unix, timeZone)/1000)], 
-                [Math.floor(getTimeOfDay(newMoonEvents[1].unix, timeZone)/1000), Math.floor(getTimeOfDay(newMoonEvents[2].unix, timeZone)/1000)]];
-        } else {
-            return [[0, getTimeOfDay(newMoonEvents[0].unix, timeZone)], 
-                [Math.floor(getTimeOfDay(newMoonEvents[1].unix, timeZone)/1000), Math.floor(getTimeOfDay(newMoonEvents[2].unix, timeZone)/1000)],
-                [Math.floor(getTimeOfDay(newMoonEvents[3].unix, timeZone)/1000), 86400]];
-        }
+        return intervals;
     }
 }
 
