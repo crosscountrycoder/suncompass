@@ -24,9 +24,6 @@ export const earthERadius = 6378.137;
 /** Earth's polar radius in kilometers (WGS84 ellipsoid) */
 export const earthPRadius = 6356.7523142;
 
-/** Flattening of the WGS84 ellipsoid */
-export const flattening = (earthERadius - earthPRadius) / earthERadius;
-
 /** The Unix timestamp corresponding to 2000-01-01 at 12:00:00 UTC. */
 export const J2000UTC = 946728000000;
 

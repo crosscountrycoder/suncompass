@@ -315,7 +315,7 @@ function maxAndMin(lat: number, long: number, start: LODProfile, end: LODProfile
 }
 
 /**
- * Calculates the time in the morning at which the sun's elevation reaches the specified angle in radians.
+ * Calculates the time in the morning at which the sun's elevation reaches the specified angle.
  * @param lat Latitude in radians
  * @param long Longitude in radians
  * @param angle Solar elevation angle in radians
@@ -352,8 +352,7 @@ export function dawn(lat: number, long: number, angle: number, type: string, max
 }
 
 /**
- * Calculates the time in the evening at which the sun's elevation reaches the specified angle. Angle should be -5/6 for sunset,
- * -6 for civil twilight, -12 for nautical twilight, and -18 for astronomical twilight.
+ * Calculates the time in the evening at which the sun's elevation reaches the specified angle.
  * @param lat Latitude in radians
  * @param long Longitude in radians
  * @param angle Solar elevation angle in radians
@@ -414,7 +413,7 @@ export function astroDusk(lat: number, long: number, maxMin: number[], startLOD:
 
 /**
  * Returns day length in milliseconds (time from sunrise to sunset). If sunset is after midnight or sunrise is before midnight 
- * (due to time zone complexities and DST), it returns the length of the continuous period of daylight that includes noon local time.
+ * (due to time zone complexities), it returns the length of the continuous daylight period that includes noon local time.
  * @param dayStart The Unix time at the start of the day.
  * @param sunEventsYesterday The value of allSunEvents() for yesterday.
  * @param sunEventsToday The value of allSunEvents() for today.
@@ -744,8 +743,13 @@ export function lengths(sunEvents: SEvent[], timeZone: TimeChange[]): number[] {
 /** Generate an object containing sunrise, sunset, twilight, solar noon and solar midnight times, day lengths,
  * solstices and equinoxes (grouped under "solstices"), perihelion, aphelion, and the time zone lookup table for
  * the given zone in the given year.
- * Note that latitude and longitude are given in degrees here, not radians, because they are treated as geographic 
- * coordinates rather than angles. They are converted to radians for calculation.
+ * @param lat Latitude in degrees
+ * @param long Longitude in degrees
+ * @param year Year
+ * @param zone Zone as IANA string (ex: "America/Los_Angeles")
+ * @returns SunTable object, with fields "solarEvents" (solar events for each day of the year), "dayLengths" (day lengths
+ * in milliseconds), solstices (Unix times of solstices/equinoxes), solsticeDates (dates of solstices/equinoxes),
+ * perihelion (Unix time of perihelion), aphelion (Unix time of aphelion), timeZoneTable (information on time zone changes) 
  */
 export function generateSunTable(lat: number, long: number, year: number, zone: string): SunTable {
     lat *= degToRad; long *= degToRad;

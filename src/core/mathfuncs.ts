@@ -1,5 +1,5 @@
 import { DateTime } from 'luxon';
-import {DAY_LENGTH, earthERadius, flattening, J2000UTC, deltaT, earthPRadius, HORIZON} from "./constants.ts";
+import {DAY_LENGTH, earthERadius, J2000UTC, deltaT, earthPRadius, HORIZON} from "./constants.ts";
 
 export type Point = [number, number];
 export type Polygon = Point[];
@@ -14,7 +14,8 @@ function fractionalYear(t: number) {
     return t / (365.2425 * DAY_LENGTH) + 1970;
 }
 
-/** Adjusts the given elevation angle (elev) of a celestial object to account for atmospheric refraction. */
+/** Adjusts the given elevation angle (elev) of a celestial object to account for atmospheric refraction. Both the input
+ * and the returned value are in radians. */
 export function refract(elev: number): number {
     const refraction = (elev <= HORIZON) ? 
     -1.569584402829295e-4/Math.tan(elev) : 
@@ -24,7 +25,6 @@ export function refract(elev: number): number {
 
 /** This function finds the approximate value of ΔT in seconds, which is calculated using the formula ΔT = TT - UT1. TT is
  * terrestrial time (based on atomic clocks) and UT1 is mean solar time at 0° longitude.
- * 
  * @param t Unix time in milliseconds. */
 export function approxDeltaT(t: number) {
     const y = fractionalYear(t);
@@ -41,8 +41,7 @@ export function approxDeltaT(t: number) {
     }
 }
 
-/** Clamps a number to the range [min, max]. 
- * If min and max are not specified, they default to -1 and 1 respectively.*/
+/** Clamps x to the range [min, max]. If min and max are not specified, they default to -1 and 1 respectively. */
 export function clamp(x: number, min=-1, max=1) {
     return Math.max(min, Math.min(x, max));
 }
@@ -59,7 +58,7 @@ export function mod(x: number, y: number) {return ((x % y) + y) % y;}
 export function polynomial(x: number, coefficients: number[], modulus?: number): number {
     let result = coefficients[coefficients.length - 1];
     for (let i = coefficients.length - 2; i >= 0; i--) {
-        result = result * x + coefficients[i];
+        result = result * x + coefficients[i]; // Horner's method
     }
     if (modulus === undefined || modulus === 0) {return result;}
     else {return mod(result, modulus);}
@@ -152,8 +151,7 @@ export function toFixedS(n: number, precision: number) {
 }
 
 /** Rotate x, y, z around z-axis by theta radians using right hand rule.
- * Used to convert ECI coordinates to ECEF, by rotating by -sc.gast(). Returns an array [x, y, z]
- */
+ * Used to convert ECI coordinates to ECEF, by rotating by -sc.gast(). Returns an array [x, y, z] */
 export function rotateZ(x: number, y: number, z: number, theta: number) {
     const [cosT, sinT] = [Math.cos(theta), Math.sin(theta)];
     const x2 = x * cosT - y * sinT;
@@ -163,7 +161,7 @@ export function rotateZ(x: number, y: number, z: number, theta: number) {
 
 /** Converts latitude and longitude in radians to rectangular ECEF coordinates in km: [x, y, z]. */
 export function latLongEcef(lat: number, long: number): number[] {
-    const e2 = 2*flattening - flattening**2;
+    const e2 = 1 - (earthPRadius / earthERadius) ** 2;
     const [sinLat, cosLat, sinLong, cosLong] = [Math.sin(lat),Math.cos(lat),Math.sin(long),Math.cos(long)];
     const N = earthERadius / Math.sqrt(1 - e2 * sinLat**2); // radius of curvature in prime vertical
     const [X, Y, Z] = [N*cosLat*cosLong, N*cosLat*sinLong, N*(1-e2)*sinLat]; // observer's ECEF coords
@@ -211,12 +209,10 @@ export function elevAzimuth(lat: number, long: number, ecefC: number[]): number[
 
 /** Finds the subpoint of a celestial body - the [latitude, longitude] at which the body is directly overhead - given the
  * body's ECEF coordinates.
- * Latitude and longitude are in radians and are in the range [-pi/2, pi/2] and [-pi, pi) respectively.
- */
+ * Latitude and longitude are in radians and are in the range [-pi/2, pi/2] and [-pi, pi) respectively. */
 export function subpoint(ecef: number[]): number[] {
-    const a = earthERadius;
-    const b = earthPRadius;
-    const e2 = 1 - b**2 / a**2;
+    const a = earthERadius, b = earthPRadius;
+    const e2 = 1 - (b / a) ** 2;
     
     function F(k: number): number {
         const dx = 1 + k / a**2;
