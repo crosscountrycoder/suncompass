@@ -705,23 +705,14 @@ export function lengths(sunEvents: SEvent[], timeZone: TimeChange[]): number[] {
 
     if (newSunEvents.length === 0) { // no sunrise, sunset, dawn, or dusk
         const s = sunEvents[0].elev;
-        if (s < ASTRO_TWILIGHT) {return [0, 0, 0, 0];} // night all day
-        else if (s < NAUTICAL_TWILIGHT) {return [0, 0, 0, 86400];} // astronomical twilight all day
-        else if (s < CIVIL_TWILIGHT) {return [0, 0, 86400, 86400];} // nautical twilight all day
-        else if (s < HORIZON) {return [0, 86400, 86400, 86400];} // civil twilight all day
-        else {return [86400, 86400, 86400, 86400];} // daylight all day
+        return [s >= HORIZON ? 86400 : 0, s >= CIVIL_TWILIGHT ? 86400 : 0, 
+            s >= NAUTICAL_TWILIGHT ? 86400 : 0, s >= ASTRO_TWILIGHT ? 86400 : 0];
     }
 
-    let etype = newSunEvents[0].type;
-    let ms = getTimeOfDay(newSunEvents[0].unix, timeZone);
-    if (etype === "Nautical Dawn" || etype === "Astro Dusk") {durations[3] += ms;}
-    else if (etype === "Civil Dawn" || etype === "Nautical Dusk") {durations[2] += ms;}
-    else if (etype === "Sunrise" || etype === "Civil Dusk") {durations[1] += ms;}
-    else if (etype === "Sunset") {durations[0] += ms;}
-
-    for (let i=0; i<newSunEvents.length-1; i++) {
-        etype = newSunEvents[i+1].type;
-        ms = getTimeOfDay(newSunEvents[i+1].unix, timeZone) - getTimeOfDay(newSunEvents[i].unix, timeZone);
+    let etype: string | undefined, ms: number | undefined;
+    for (let i=0; i<newSunEvents.length; i++) {
+        etype = newSunEvents[i].type;
+        ms = getTimeOfDay(newSunEvents[i].unix, timeZone) - (i === 0 ? 0 : getTimeOfDay(newSunEvents[i-1].unix, timeZone));
         if (etype === "Nautical Dawn" || etype === "Astro Dusk") {durations[3] += ms;}
         else if (etype === "Civil Dawn" || etype === "Nautical Dusk") {durations[2] += ms;}
         else if (etype === "Sunrise" || etype === "Civil Dusk") {durations[1] += ms;}

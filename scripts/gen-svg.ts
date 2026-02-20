@@ -1,6 +1,6 @@
 import {sunEventsDay, allSunEvents, intervals, lengths, generateSunTable} from "../src/core/suncalc.ts";
 import {find} from "geo-tz";
-import {generateMoonSvg, generateSunSvg} from "../src/core/gen-svg.ts";
+import {generateMoonSvg, generateSunSvg} from "../src/core/svg.ts";
 import { DateTime } from "luxon";
 import fs from "fs";
 import * as mf from "../src/core/mathfuncs.ts";
@@ -36,20 +36,23 @@ const moonFileName =
 args.length === 6 ? `./diagrams/${args[5]}-moon-${year}.svg` : `./diagrams/moon.svg`;
 
 const sunTable = generateSunTable(lat, long, year, timeZone);
+const dayLengthTitle = `Day Length Chart for ${lat.toFixed(4)}, ${long.toFixed(4)} in ${year} - SunCompass`;
+const riseSetTitle = `Sunrise/Sunset Chart for ${lat.toFixed(4)}, ${long.toFixed(4)} in ${year} - SunCompass`;
+const moonTitle = `Moon Chart for ${lat.toFixed(4)}, ${long.toFixed(4)} in ${year} - SunCompass`; 
 
 // Generate day length SVG
-const daylengthSvg = generateSunSvg({sunTable: sunTable, type: "length"});
+const daylengthSvg = generateSunSvg({sunTable: sunTable, type: "length", title: dayLengthTitle});
 fs.writeFileSync(daylengthFileName, daylengthSvg, "utf8");
 console.log(`File written to ${daylengthFileName}`);
 
 // Generate sunrise-sunset SVG
-const risesetSvg = generateSunSvg({sunTable: sunTable, type: "rise-set"});
+const risesetSvg = generateSunSvg({sunTable: sunTable, type: "rise-set", title: riseSetTitle});
 fs.writeFileSync(risesetFileName, risesetSvg, "utf8");
 console.log(`File written to ${risesetFileName}`);
 
 // Do moon calculations
 const moonTable = generateMoonTable(lat, long, year, timeZone);
-const moonSvg = generateMoonSvg({sunTable: sunTable, moonTable: moonTable});
+const moonSvg = generateMoonSvg({sunTable: sunTable, moonTable: moonTable, title: moonTitle});
 fs.writeFileSync(moonFileName, moonSvg, "utf8");
 console.log(`File written to ${moonFileName}`);
 

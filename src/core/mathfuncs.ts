@@ -1,9 +1,10 @@
 import { DateTime } from 'luxon';
-import {DAY_LENGTH, earthERadius, J2000UTC, deltaT, earthPRadius, HORIZON} from "./constants.ts";
+import {DAY_LENGTH, earthERadius, J2000UTC, deltaT, earthPRadius, HORIZON, degToRad} from "./constants.ts";
 
 export type Point = [number, number];
+export type PointBearing = [number, number, number]; // lat, long, bearing
 export type Polygon = Point[];
-export type Polyline = Point[];
+export type PolygonBearing = PointBearing[];
 export type HourAngleFn = (long: number, unix: number) => number; 
 
 /** Same as the toMillis() method in Luxon, but truncated to the nearest integer. */
@@ -271,18 +272,61 @@ export function dayStarts(start: DateTime, end: DateTime): DateTime[] {
     return dayStarts;
 }
 
-export function meridianPassings(
-    long: number, // longitude in radians
-    start: number, // start of day, in Unix milliseconds
-    end: number, // end of day, in Unix milliseconds
-    targetHourAngle: number, // in radians (ex. 0 for solar noon, or ±pi for solar midnight)
-    hAngle: HourAngleFn // function returning hour angle in radians, range [-pi, pi)
-): number[] 
+/** Calculates the angular distance and bearing between points [lat1, long1] and [lat2, long2].
+ * @param lat1 Latitude of first point
+ * @param long1 Longitude of first point
+ * @param lat2 Latitude of second point
+ * @param long2 Longitude of second point
+ * @param degrees Whether to express coordinates in degrees (true, default) or radians (false)
+ * @returns Angular distance and bearing in degrees (if degrees = true or undefined) or radians (if degrees = false).
+ * Bearing is clockwise from north.
+ */
+export function distBearing(lat1: number, long1: number, lat2: number, long2: number, degrees: boolean = true): [number, number] {
+    if (degrees) {lat1 *= degToRad; long1 *= degToRad; lat2 *= degToRad; long2 *= degToRad;}
+    const sinLat1 = Math.sin(lat1), cosLat1 = Math.cos(lat1);
+    const sinLat2 = Math.sin(lat2), cosLat2 = Math.cos(lat2);
+    const cosLong = Math.cos(long2 - long1);
+    const dist = Math.acos(clamp(sinLat1 * sinLat2 + cosLat1 * cosLat2 * cosLong));
+
+    const y = Math.sin(long2 - long1) * cosLat2;
+    const x = cosLat1 * sinLat2 - sinLat1 * cosLat2 * Math.cos(long2 - long1);
+    const bearing = mod(Math.atan2(y, x), 2*Math.PI);
+    if (degrees) {return [dist / degToRad, bearing / degToRad];}
+    else {return [dist, bearing];}
+}
+
+/** Given a starting point, bearing, and angular distance, find the destination point. 
+ * @param lat Latitude
+ * @param long Longitude
+ * @param bearing Compass bearing, clockwise from north
+ * @param dist Angular distance
+ * @param degrees Whether to take and return values in degrees (default, true) or radians (false)
+ * @returns Destination [latitude, longitude]
+*/
+export function destPoint(lat: number, long: number, bearing: number, dist: number, degrees: boolean = true): PointBearing {
+    if (degrees) {lat *= degToRad; long *= degToRad; bearing *= degToRad; dist *= degToRad;}
+    const sinLat = Math.sin(lat), cosLat = Math.cos(lat);
+    const sinDist = Math.sin(dist), cosDist = Math.cos(dist);
+    const lat1 = Math.asin(clamp(sinLat * cosDist + cosLat * sinDist * Math.cos(bearing)));
+    const y = Math.sin(bearing) * sinDist * cosLat;
+    const x = cosDist - sinLat * Math.sin(lat1);
+    const long1 = mod(long + Math.atan2(y, x) + Math.PI, 2*Math.PI) - Math.PI;
+    return degrees ? [lat1/degToRad, long1/degToRad, bearing/degToRad] : [lat1, long1, bearing];
+}
+
+/** Calculates the times from start to end at which a celestial body reaches a given hour angle. 
+ * @param long Longitude in radians
+ * @param start Start of day, in Unix milliseconds
+ * @param end End of day, in Unix milliseconds
+ * @param targetHourAngle Target hour angle in radians. 0 = solar noon, ±pi = solar midnight
+ * @param hAngle Function returning hour angle in radians
+ * @returns Array with meridian passing times from start to end.
+*/
+export function meridianPassings(long: number, start: number, end: number, targetHourAngle: number, hAngle: HourAngleFn): number[] 
 {
     const ha0 = hAngle(long, start), ha1 = hAngle(long, end);
     const haDiff = mod(ha1 - ha0 - Math.PI, 2*Math.PI) + Math.PI; // change in hour angle (rad) during the day
     const targetAdjusted = mod(targetHourAngle - ha0, 2*Math.PI); // diff between target hour angle and hour angle at 00:00
-
     const haRate = haDiff / (end - start); // rate at which the hour angle is changing, in radians per millisecond.
     const times = [];
     for (let i = targetAdjusted; i < haDiff; i += 2*Math.PI) {

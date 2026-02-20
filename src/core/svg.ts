@@ -9,12 +9,13 @@ import * as mf from "./mathfuncs.ts";
 import {intervalsSvg, lengths, intervalsNightCivilTwilight, type SunTable} from "./suncalc.ts";
 import type {MoonTable} from "./mooncalc.ts";
 
-const svgClose = "</svg>";
+const svgClose = "</svg>\n";
 const sunColors = ["#80c0ff", "#0060c0", "#004080", "#002040", "#000000"];
 
 type sunSvgOptions = {
     sunTable: SunTable;
     type: string;
+    title: string;
     svgWidth?: number;
     svgHeight?: number;
     diagramWidth?: number;
@@ -33,6 +34,7 @@ type sunSvgOptions = {
 type moonSvgOptions = {
     sunTable: SunTable;
     moonTable: MoonTable;
+    title: string;
     svgWidth?: number;
     svgHeight?: number;
     diagramWidth?: number;
@@ -49,12 +51,12 @@ type moonSvgOptions = {
 };
 
 /** Generates the opening of an SVG */
-function svgOpen(width: number, height: number, viewBoxWidth: number, viewBoxHeight: number): string {
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${viewBoxWidth} ${viewBoxHeight}">\n`
+export function svgOpen(width: number, height: number, viewBoxWidth: number, viewBoxHeight: number): string {
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${viewBoxWidth} ${viewBoxHeight}">\n`;
 }
 
 /** Simplifies a polygon or polyline (represented as points) to remove collinear points. */
-function simplifyCollinear(points: mf.Polygon | mf.Polyline) {
+export function simplifyCollinear(points: mf.Polygon) {
     if (points.length <= 2) {return points;}
     const newPoints = [points[0], points[1]];
     for (let i=2; i<points.length; i++) {
@@ -67,8 +69,8 @@ function simplifyCollinear(points: mf.Polygon | mf.Polyline) {
     return newPoints;
 }
 
-function pathFromArray(
-    points: mf.Polygon | mf.Polyline,
+export function pathFromArray(
+    points: mf.Polygon,
     fillColor: string = "none",
     strokeColor: string = "none",
     strokeWidth: number = 0,
@@ -93,7 +95,7 @@ function pathFromArray(
 
 /** Generates SVG code for a rectangle with the top-left corner at the given x and y cordinates, and the given width, height,
  * fill and stroke colors. */
-function rectangleSvg(x: number, y: number, width: number, height: number, fillColor: string = "none", strokeColor: string = "none",
+export function rectangleSvg(x: number, y: number, width: number, height: number, fillColor: string = "none", strokeColor: string = "none",
     strokeWidth: number = 0) {
     return `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${fillColor}" stroke="${strokeColor}" stroke-width="${strokeWidth}"/>\n`
 }
@@ -101,7 +103,7 @@ function rectangleSvg(x: number, y: number, width: number, height: number, fillC
 /** Generates SVG code for a text box with the given text, centered at the given x and y coordinate, with the given font and font size. 
  * Text anchor can be "start" (left-aligned), "middle" (centered), or "end" (right-aligned). Alignment baseline can be either 
  * "text-before-edge" (top-aligned), "middle" (centered), or "text-after-edge" (bottom-aligned). */
-function textSvg(
+export function textSvg(
     text: string, 
     x: number, 
     y: number, 
@@ -117,7 +119,7 @@ function textSvg(
 }
 
 /** Generates an SVG line from (x1, y1) to (x2, y2) with the given color and width. */
-function lineSvg(p1: mf.Point, p2: mf.Point, color: string, width: number, precision: number = 2, nonScaling: boolean = false): string {
+export function lineSvg(p1: mf.Point, p2: mf.Point, color: string, width: number, precision: number = 2, nonScaling: boolean = false): string {
     return `<line x1="${mf.toFixedS(p1[0],precision)}" y1="${mf.toFixedS(p1[1],precision)}" x2="${mf.toFixedS(p2[0],precision)}"`
     + ` y2="${mf.toFixedS(p2[1],precision)}" stroke="${color}" stroke-width="${width}"` + 
     (nonScaling ? ` vector-effect="non-scaling-stroke"/>\n` : `/>\n`);
@@ -125,17 +127,17 @@ function lineSvg(p1: mf.Point, p2: mf.Point, color: string, width: number, preci
 
 /** Returns an array of month abbreviations in the given language, represented by a language code, such as "en" (English), "es"
  * (Spanish), "fr" (French), "zh" (Chinese). So far there is only English - I plan to add more when I localize the site. */
-function months(language: string = "en"): string[] {
+export function months(language: string = "en"): string[] {
     return ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 }
 
 /** Edges of the months, used for drawing gridlines. */
-function monthEdges(leapYear: boolean = false): number[] {
+export function monthEdges(leapYear: boolean = false): number[] {
     if (leapYear) {return [0,31,60,91,121,152,182,213,244,274,305,335,366];}
     else {return [0,31,59,90,120,151,181,212,243,273,304,334,365];}
 }
 
-function generateGrid(options: sunSvgOptions | moonSvgOptions, gridlineColor: string) {
+export function generateGrid(options: sunSvgOptions | moonSvgOptions, gridlineColor: string) {
     // draw y-axis and gridlines
     const gridInterval = options.gridInterval!;
     const topPadding = options.topPadding!;
@@ -176,6 +178,7 @@ function generateGrid(options: sunSvgOptions | moonSvgOptions, gridlineColor: st
  * Parameters should be passed in an object. All parameters except sunTable, type, timeZone, and solsticesEquinoxes are optional.
  * @param sunTable Values of "generateSunTable" for each day of the year.
  * @param type Set to "length" to generate a day/night/twilight length chart, or "rise-set" to generate a chart with times of day.
+ * @param title Title of the SVG.
  * @param svgWidth Width of the SVG file.
  * @param svgHeight Height of the SVG file.
  * @param diagramWidth Width of the SVG's view box.
@@ -194,7 +197,7 @@ function generateGrid(options: sunSvgOptions | moonSvgOptions, gridlineColor: st
  * bottomPadding.
  */
 export function generateSunSvg(options: sunSvgOptions): string {
-    const {sunTable,type,svgWidth=1035,svgHeight=535,diagramWidth=1000,diagramHeight=500,leftPadding=25,
+    const {sunTable,type,title,svgWidth=1035,svgHeight=535,diagramWidth=1000,diagramHeight=500,leftPadding=25,
         rightPadding=10,topPadding=10,bottomPadding=25,textSize=11,font="Arial",language="en",gridInterval=2,gridlineWidth=0.5} 
         = options;
     const days = sunTable.solarEvents.length; // 365 days for common years, 366 for leap years
@@ -226,7 +229,7 @@ export function generateSunSvg(options: sunSvgOptions): string {
             solarNoons.push(curDay);
         }
         
-        const groups: mf.Polyline[] = []; // a group of multiple lines, each representing a cluster of solar noons
+        const groups: mf.Polygon[] = []; // a group of multiple lines, each representing a cluster of solar noons
         for (const solarNoon of solarNoons[0]) {groups.push([[0.5, solarNoon]]);}
         for (let i=1; i<days; i++) { // for each day of the year
             for (const noon of solarNoons[i]) { // for each solar noon of the day (may be more than 1)
@@ -257,7 +260,7 @@ export function generateSunSvg(options: sunSvgOptions): string {
             solarMidnights.push(curDay);
         }
         
-        const groups: mf.Polyline[] = []; // a group of multiple lines (number[][]), each representing a cluster of solar midnights
+        const groups: mf.Polygon[] = []; // a group of multiple lines (number[][]), each representing a cluster of solar midnights
         for (const solarMidnight of solarMidnights[0]) {groups.push([[0.5, solarMidnight]]);}
         for (let i=1; i<days; i++) { // for each day of the year
             for (const midnight of solarMidnights[i]) { // for each solar midnight of the day (may be more than 1)
@@ -289,7 +292,7 @@ export function generateSunSvg(options: sunSvgOptions): string {
     // generate SVG opening and background
     const viewBoxWidth = diagramWidth + leftPadding + rightPadding;
     const viewBoxHeight = diagramHeight + topPadding + bottomPadding;
-    let svgString = svgOpen(svgWidth, svgHeight, viewBoxWidth, viewBoxHeight);
+    let svgString = svgOpen(svgWidth, svgHeight, viewBoxWidth, viewBoxHeight) + `<title>${title}</title>\n`;
     svgString += rectangleSvg(0, 0, viewBoxWidth, viewBoxHeight, "#ffffff"); // white background
 
     // special coordinate system for graph (x is in days, y is in seconds)
@@ -365,6 +368,7 @@ export function generateSunSvg(options: sunSvgOptions): string {
  * Parameters should be passed in an object. All parameters except events, type, timeZone, and solsticesEquinoxes are optional.
  * @param sunTable Values of "generateSunTable" for each day of the year.
  * @param moonTable Values of "generateMoonTable" for each day of the year.
+ * @param title Title of the SVG.
  * @param svgWidth Width of the SVG file.
  * @param svgHeight Height of the SVG file.
  * @param diagramWidth Width of the SVG's view box.
@@ -383,7 +387,7 @@ export function generateSunSvg(options: sunSvgOptions): string {
  * bottomPadding.
  */
 export function generateMoonSvg(options: moonSvgOptions) {
-    const {sunTable,moonTable,svgWidth=1035,svgHeight=535,diagramWidth=1000,
+    const {sunTable,moonTable,title,svgWidth=1035,svgHeight=535,diagramWidth=1000,
         diagramHeight=500,leftPadding=25,rightPadding=10,topPadding=10,bottomPadding=25,textSize=11,font="Arial",
         language="en",gridInterval=2,gridlineWidth=0.5} = options;
     const days = sunTable.solarEvents.length; // 365 days for common years, 366 for leap years
@@ -400,7 +404,7 @@ export function generateMoonSvg(options: moonSvgOptions) {
     // generate SVG opening and background
     const viewBoxWidth = diagramWidth + leftPadding + rightPadding;
     const viewBoxHeight = diagramHeight + topPadding + bottomPadding;
-    let svgString = svgOpen(svgWidth, svgHeight, viewBoxWidth, viewBoxHeight);
+    let svgString = svgOpen(svgWidth, svgHeight, viewBoxWidth, viewBoxHeight) + `<title>${title}</title>\n`;
     svgString += rectangleSvg(0, 0, viewBoxWidth, viewBoxHeight, "#ffffff"); // white background
 
     // special coordinate system for graph (x is in days, y is in seconds)
