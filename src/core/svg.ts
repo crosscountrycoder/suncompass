@@ -9,7 +9,6 @@ import * as mf from "./mathfuncs.ts";
 import {intervalsSvg, lengths, intervalsNightCivilTwilight, type SunTable} from "./suncalc.ts";
 import type {MoonTable} from "./mooncalc.ts";
 
-const svgClose = "</svg>\n";
 const sunColors = ["#80c0ff", "#0060c0", "#004080", "#002040", "#000000"];
 
 type sunSvgOptions = {
@@ -51,8 +50,10 @@ type moonSvgOptions = {
 };
 
 /** Generates the opening of an SVG */
-export function svgOpen(width: number, height: number, viewBoxWidth: number, viewBoxHeight: number): string {
-    return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${viewBoxWidth} ${viewBoxHeight}">\n`;
+export function svgOpen(width: number, height: number, viewBoxWidth: number, viewBoxHeight: number, title: string): string {
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${viewBoxWidth} ${viewBoxHeight}">\n`
+    + `<title>${title}</title>\n`
+    + `<style>.nss line, .nss path, .nss rect {vector-effect: non-scaling-stroke;}</style>\n<g class="nss">\n`;
 }
 
 /** Simplifies a polygon or polyline (represented as points) to remove collinear points. */
@@ -71,12 +72,11 @@ export function simplifyCollinear(points: mf.Polygon) {
 
 export function pathFromArray(
     points: mf.Polygon,
-    fillColor: string = "none",
-    strokeColor: string = "none",
-    strokeWidth: number = 0,
+    closed: boolean,
+    fillColor?: string,
+    strokeColor?: string,
+    strokeWidth?: number,
     precision: number = 2,
-    closed: boolean = true,
-    noScaling: boolean = false,
 ): string {
     const simplifiedPoints = simplifyCollinear(points);
     if (simplifiedPoints.length === 0) {return "";}
@@ -87,42 +87,37 @@ export function pathFromArray(
 
     const closeCmd = closed ? "Z" : "";
     const d = lineTos ? `${moveTo}${lineTos}${closeCmd}` : `${moveTo}${closeCmd}`;
-    const attrs = [`fill="${fillColor}"`, `stroke="${strokeColor}"`, `stroke-width="${strokeWidth}"`,
-        noScaling ? `vector-effect="non-scaling-stroke"` : "",`d="${d}"`].filter(Boolean).join(" ");
+    const attrs = [
+        fillColor === undefined ? `` : `fill="${fillColor}"`,
+        strokeColor === undefined ? `` : `stroke="${strokeColor}"`,
+        strokeWidth === undefined ? `` : `stroke-width="${strokeWidth}"`,
+        `d="${d}"`].filter(Boolean).join(" ");
     return `<path ${attrs}/>\n`;
 }
 
 
 /** Generates SVG code for a rectangle with the top-left corner at the given x and y cordinates, and the given width, height,
  * fill and stroke colors. */
-export function rectangleSvg(x: number, y: number, width: number, height: number, fillColor: string = "none", strokeColor: string = "none",
-    strokeWidth: number = 0) {
-    return `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${fillColor}" stroke="${strokeColor}" stroke-width="${strokeWidth}"/>\n`
+export function rectangleSvg(x: number, y: number, width: number, height: number, fillColor?: string, strokeColor?: string,
+    strokeWidth?: number) {
+    return `<rect x="${x}" y="${y}" width="${width}" height="${height}"`
+    + (fillColor === undefined ? `` : ` fill="${fillColor}"`) 
+    + (strokeColor === undefined ? `` : ` stroke="${strokeColor}"`)
+    + (strokeWidth === undefined ? `` : ` stroke-width="${strokeWidth}"`) + `/>\n`;
 }
 
 /** Generates SVG code for a text box with the given text, centered at the given x and y coordinate, with the given font and font size. 
  * Text anchor can be "start" (left-aligned), "middle" (centered), or "end" (right-aligned). Alignment baseline can be either 
  * "text-before-edge" (top-aligned), "middle" (centered), or "text-after-edge" (bottom-aligned). */
-export function textSvg(
-    text: string, 
-    x: number, 
-    y: number, 
-    fontSize: number, 
-    font: string, 
-    textColor: string, 
-    textAnchor: string,
-    alignmentBaseline: string,
-    precision: number = 2
-): string {
-    return `<text x="${mf.toFixedS(x,precision)}" y="${mf.toFixedS(y,precision)}" font-family="${font}" font-size="${fontSize}pt"`
-    + ` text-anchor="${textAnchor}" alignment-baseline="${alignmentBaseline}" fill="${textColor}">${text}</text>\n`;
+export function textSvg(text: string, x: number, y: number, precision: number = 2): string {
+    return `<text x="${mf.toFixedS(x,precision)}" y="${mf.toFixedS(y,precision)}">${text}</text>\n`;
 }
 
 /** Generates an SVG line from (x1, y1) to (x2, y2) with the given color and width. */
-export function lineSvg(p1: mf.Point, p2: mf.Point, color: string, width: number, precision: number = 2, nonScaling: boolean = false): string {
+export function lineSvg(p1: mf.Point, p2: mf.Point, color?: string, width?: number, precision: number = 2): string {
     return `<line x1="${mf.toFixedS(p1[0],precision)}" y1="${mf.toFixedS(p1[1],precision)}" x2="${mf.toFixedS(p2[0],precision)}"`
-    + ` y2="${mf.toFixedS(p2[1],precision)}" stroke="${color}" stroke-width="${width}"` + 
-    (nonScaling ? ` vector-effect="non-scaling-stroke"/>\n` : `/>\n`);
+    + ` y2="${mf.toFixedS(p2[1],precision)}"` + (color === undefined ? `` : ` stroke="${color}"`)
+    + (width === undefined ? `` : ` stroke-width="${width}"`) + `/>\n`;
 }
 
 /** Returns an array of month abbreviations in the given language, represented by a language code, such as "en" (English), "es"
@@ -137,7 +132,10 @@ export function monthEdges(leapYear: boolean = false): number[] {
     else {return [0,31,59,90,120,151,181,212,243,273,304,334,365];}
 }
 
-export function generateGrid(options: sunSvgOptions | moonSvgOptions, gridlineColor: string) {
+/** This returns an array of two strings: [lineString, textString].
+ * lineString is intended to be enclosed within the <g id="graph"> block. textString should be outside the block.
+ */
+export function generateGrid(options: sunSvgOptions | moonSvgOptions, gridlineColor: string): [string, string] {
     // draw y-axis and gridlines
     const gridInterval = options.gridInterval!;
     const topPadding = options.topPadding!;
@@ -152,24 +150,27 @@ export function generateGrid(options: sunSvgOptions | moonSvgOptions, gridlineCo
     const scaleX = diagramWidth / days;
     const language = options.language!;
 
-    let svgString = "";
+    let textString = `<g id="gridtext" font-family="${font}" font-size="${textSize}pt" dominant-baseline="middle" ` + 
+    `fill="#000000">\n<g text-anchor="end">\n`; // string containing x and y axis labels
+
+    let lineString = `<g id="gridlines" stroke="${gridlineColor}" stroke-width="${gridlineWidth}">\n`; // string containing gridlines
     for (let i=0; i<=24; i+=gridInterval) {
         const y = topPadding + (1-i/24) * diagramHeight;
-        svgString += textSvg(String(i), leftPadding-5, y, textSize, font, "#000000", "end", "middle");
-        svgString += lineSvg([leftPadding, y], [leftPadding+diagramWidth, y], gridlineColor, gridlineWidth);
+        textString += textSvg(String(i), leftPadding-5, y);
+        lineString += lineSvg([0, 3600*i], [days, 3600*i]);
     }
+    textString += `</g>\n<g text-anchor="middle">\n`;
 
     // draw x-axis and gridlines
     for (let i=0; i<12; i++) {
-        const x = monthEdges(isLeapYear)[i] * scaleX + leftPadding;
         const xText = (monthEdges(isLeapYear)[i] + monthEdges(isLeapYear)[i+1])/2 * scaleX + leftPadding;
         const y = topPadding+diagramHeight;
-        svgString += textSvg(months(language)[i], xText, y+12, textSize, font, "#000000", "middle", "middle");
-        svgString += lineSvg([x, topPadding], [x, y], gridlineColor, gridlineWidth);
+        textString += textSvg(months(language)[i], xText, y+12);
+        lineString += lineSvg([monthEdges(isLeapYear)[i], 0], [monthEdges(isLeapYear)[i], 86400]);
     }
-    svgString += lineSvg([leftPadding+diagramWidth, topPadding], [leftPadding+diagramWidth, topPadding+diagramHeight], 
-        gridlineColor, gridlineWidth); // right boundary of diagram
-    return svgString;
+    textString += `</g>\n</g>\n`;
+    lineString += lineSvg([days, 0], [days, 86400]) + `</g>\n`; // right boundary of diagram
+    return [lineString, textString];
 }
 
 /**
@@ -197,9 +198,8 @@ export function generateGrid(options: sunSvgOptions | moonSvgOptions, gridlineCo
  * bottomPadding.
  */
 export function generateSunSvg(options: sunSvgOptions): string {
-    const {sunTable,type,title,svgWidth=1035,svgHeight=535,diagramWidth=1000,diagramHeight=500,leftPadding=25,
-        rightPadding=10,topPadding=10,bottomPadding=25,textSize=11,font="Arial",language="en",gridInterval=2,gridlineWidth=0.5} 
-        = options;
+    const {sunTable,type,title,svgWidth=1035,svgHeight=535,diagramWidth=1000,diagramHeight=500,leftPadding=25,rightPadding=10,
+        topPadding=10,bottomPadding=25,textSize=11,font="Arial",language="en",gridInterval=2,gridlineWidth=0.5} = options;
     const days = sunTable.solarEvents.length; // 365 days for common years, 366 for leap years
     const nOptions = // normalized options
     {...options,diagramWidth,diagramHeight,leftPadding,rightPadding,topPadding,bottomPadding,textSize,font,language,gridInterval,gridlineWidth};
@@ -245,7 +245,7 @@ export function generateSunSvg(options: sunSvgOptions): string {
             }
         }
         const lines: string[] = [];
-        for (const line of groups) {lines.push(pathFromArray(line, "none", "#ff0000", 1, 1, false, true));}
+        for (const line of groups) {lines.push(pathFromArray(line, false, undefined, "#ff0000"));}
         return lines;
     }
 
@@ -276,30 +276,28 @@ export function generateSunSvg(options: sunSvgOptions): string {
             }
         }
         const lines: string[] = [];
-        for (const line of groups) {lines.push(pathFromArray(line, "none", "#0000ff", 1, 1, false, true));}
+        for (const line of groups) {lines.push(pathFromArray(line, false, undefined, "#0000ff"));}
         return lines;
     }
 
     function toPolygons(intervals: number[][][], color: string): string[] {
         const polygons = mf.intervalsToPolygon(intervals);
         const strings: string[] = [];
-        for (const polygon of polygons) {
-            strings.push(pathFromArray(polygon, color, "none", 0));
-        }
+        for (const polygon of polygons) {strings.push(pathFromArray(polygon, true, color));}
         return strings;
     }
 
     // generate SVG opening and background
     const viewBoxWidth = diagramWidth + leftPadding + rightPadding;
     const viewBoxHeight = diagramHeight + topPadding + bottomPadding;
-    let svgString = svgOpen(svgWidth, svgHeight, viewBoxWidth, viewBoxHeight) + `<title>${title}</title>\n`;
+    let svgString = svgOpen(svgWidth, svgHeight, viewBoxWidth, viewBoxHeight, title);
     svgString += rectangleSvg(0, 0, viewBoxWidth, viewBoxHeight, "#ffffff"); // white background
 
     // special coordinate system for graph (x is in days, y is in seconds)
     const scaleX = diagramWidth / days;
     const scaleY = -diagramHeight / 86400;
-    svgString += `<g transform="translate(${leftPadding}, ${topPadding+diagramHeight})` + 
-    ` scale(${scaleX.toPrecision(8)}, ${scaleY.toPrecision(8)})">\n`;
+    svgString += `<g id="graph" transform="translate(${leftPadding}, ${topPadding+diagramHeight})` + 
+    ` scale(${scaleX.toPrecision(8)}, ${scaleY.toPrecision(8)})" stroke-width="1" fill="none">\n`;
 
     if (type === "length") { // day/twilight/night length plot
         const dLengths: number[] = []; // day lengths
@@ -320,10 +318,10 @@ export function generateSunSvg(options: sunSvgOptions): string {
         
         // construct SVG day length diagram
         svgString += rectangleSvg(0, 0, days, 86400, sunColors[4]); // night
-        for (const polygon of ap) {svgString += pathFromArray(polygon, sunColors[3]);} // astronomical twilight
-        for (const polygon of np) {svgString += pathFromArray(polygon, sunColors[2]);} // nautical twilight
-        for (const polygon of cp) {svgString += pathFromArray(polygon, sunColors[1]);} // civil twilight
-        for (const polygon of dp) {svgString += pathFromArray(polygon, sunColors[0]);} // daylight
+        for (const polygon of ap) {svgString += pathFromArray(polygon, true, sunColors[3]);} // astronomical twilight
+        for (const polygon of np) {svgString += pathFromArray(polygon, true, sunColors[2]);} // nautical twilight
+        for (const polygon of cp) {svgString += pathFromArray(polygon, true, sunColors[1]);} // civil twilight
+        for (const polygon of dp) {svgString += pathFromArray(polygon, true, sunColors[0]);} // daylight
     }
     else if (type === "rise-set") { // sunrise, sunset, dusk, dawn plot
         const aIntervals: number[][][] = []; // intervals of astronomical twilight or brighter
@@ -355,10 +353,12 @@ export function generateSunSvg(options: sunSvgOptions): string {
     // draw solstices and equinoxes as green lines
     for (const date of Object.values(sunTable.solsticeDates)) {
         const x = date + 0.5;
-        const p1: mf.Point = [x, 86400], p2: mf.Point = [x, 0];
-        svgString += lineSvg(p1, p2, "#00c000", 1, 2, true);
+        const p1: mf.Point = [x, 0], p2: mf.Point = [x, 86400];
+        svgString += lineSvg(p1, p2, "#00c000");
     }
-    svgString += ("</g>\n" + generateGrid(nOptions, "#808080") + svgClose);
+
+    const [gridLines, gridText] = generateGrid(nOptions, "#808080");
+    svgString += (gridLines + "</g>\n" + gridText + "</g>\n</svg>\n");
     return svgString;
 }
 
@@ -387,46 +387,50 @@ export function generateSunSvg(options: sunSvgOptions): string {
  * bottomPadding.
  */
 export function generateMoonSvg(options: moonSvgOptions) {
-    const {sunTable,moonTable,title,svgWidth=1035,svgHeight=535,diagramWidth=1000,
-        diagramHeight=500,leftPadding=25,rightPadding=10,topPadding=10,bottomPadding=25,textSize=11,font="Arial",
-        language="en",gridInterval=2,gridlineWidth=0.5} = options;
+    const {sunTable,moonTable,title,svgWidth=1035,svgHeight=535,diagramWidth=1000,diagramHeight=500,leftPadding=25,rightPadding=10,
+        topPadding=10,bottomPadding=25,textSize=11,font="Arial",language="en",gridInterval=2,gridlineWidth=0.5} = options;
     const days = sunTable.solarEvents.length; // 365 days for common years, 366 for leap years
     const nOptions = // normalized options
     {...options,diagramWidth,diagramHeight,leftPadding,rightPadding,topPadding,bottomPadding,textSize,font,language,gridInterval,gridlineWidth};
     
-    function toPolygons(intervals: number[][][], color: string): string[] {
+    function toPolygons(intervals: number[][][]): string[] {
         const polygons = mf.intervalsToPolygon(intervals);
         const strings: string[] = [];
-        for (const polygon of polygons) {strings.push(pathFromArray(polygon, color));}
+        for (const polygon of polygons) {strings.push(pathFromArray(polygon, true));}
         return strings;
     }
 
     // generate SVG opening and background
     const viewBoxWidth = diagramWidth + leftPadding + rightPadding;
     const viewBoxHeight = diagramHeight + topPadding + bottomPadding;
-    let svgString = svgOpen(svgWidth, svgHeight, viewBoxWidth, viewBoxHeight) + `<title>${title}</title>\n`;
+    let svgString = svgOpen(svgWidth, svgHeight, viewBoxWidth, viewBoxHeight, title);
     svgString += rectangleSvg(0, 0, viewBoxWidth, viewBoxHeight, "#ffffff"); // white background
 
     // special coordinate system for graph (x is in days, y is in seconds)
     const scaleX = diagramWidth / days;
     const scaleY = -diagramHeight / 86400;
-    svgString += `<g transform="translate(${leftPadding}, ${topPadding+diagramHeight})` + 
-    ` scale(${scaleX.toPrecision(8)}, ${scaleY.toPrecision(8)})">\n`;
+    svgString += `<g id="graph" transform="translate(${leftPadding}, ${topPadding+diagramHeight})` + 
+    ` scale(${scaleX.toPrecision(8)}, ${scaleY.toPrecision(8)})" stroke-width="1">\n`;
     
     // add light blue polygons (when moon above horizon)
-    const moonPolygons = toPolygons(moonTable.intervals, "#80c0ff");
+    svgString += `<g id="moonlight" fill="#80c0ff">\n`
+    const moonPolygons = toPolygons(moonTable.intervals);
     for (const polygon of moonPolygons) {svgString += polygon;}
+    svgString += `</g>\n`;
 
     // draw lines for new and full moons
+    let newMoonString = `<g id="new-moons" stroke="#ff0000">\n`;
+    let fullMoonString = `<g id="full-moons" stroke="#0000ff">\n`;
     for (const phase of moonTable.phases) {
-        if (phase.type % 2 === 0) {   
-            const x = phase.date;
-            const color = phase.type === 0 ? "#ff0000" : "#0000ff"; // red = new moon, blue = full moon
-            for (const interval of moonTable.intervals[x]) {
-                svgString += lineSvg([x+0.5, interval[0]], [x+0.5, interval[1]], color, 1, 2, true);
-            }
+        const x = phase.date;
+        for (const interval of moonTable.intervals[x]) {
+            if (phase.type === 0) {newMoonString += lineSvg([x+0.5, interval[0]], [x+0.5, interval[1]]);}
+            else if (phase.type === 2) {fullMoonString += lineSvg([x+0.5, interval[0]], [x+0.5, interval[1]]);}
         }
     }
+    newMoonString += `</g>\n`;
+    fullMoonString += `</g>\n`;
+    svgString += newMoonString + fullMoonString;
 
     // add night and civil twilight overlays
     const nIntervals: number[][][] = [];
@@ -436,11 +440,15 @@ export function generateMoonSvg(options: moonSvgOptions) {
         nIntervals.push(nIntervalsI);
         cIntervals.push(cIntervalsI);
     }
-    const nPolygons = toPolygons(nIntervals, "rgba(0, 0, 0, 0.5)");
-    const cPolygons = toPolygons(cIntervals, "rgba(0, 0, 0, 0.25)");
+    const nPolygons = toPolygons(nIntervals);
+    const cPolygons = toPolygons(cIntervals);
+    svgString += `<g id="night" fill="rgba(0, 0, 0, 0.5)" stroke="none">\n`;
     for (const polygon of nPolygons) {svgString += polygon;}
+    svgString += `</g>\n<g id="civil-twilight" fill="rgba(0, 0, 0, 0.25)" stroke="none">\n`;
     for (const polygon of cPolygons) {svgString += polygon;}
+    svgString += `</g>\n`;
 
-    svgString += ("</g>\n" + generateGrid(nOptions, "#000000") + svgClose);
+    const [gridLines, gridText] = generateGrid(nOptions, "#000000");
+    svgString += (gridLines + "</g>\n" + gridText + "</g>\n</svg>\n");
     return svgString;
 }

@@ -155,14 +155,14 @@ function svgCircleEquirectangular(lat: number, long: number, radius: number, num
     const color = `rgba(${r}, ${g}, ${b}, ${a})`;
     if (containsNorthPole) {
         const sortedPolygon: mf.Polygon = [[90, 180], [90, -180], ...sortPolygon(polygon)];
-        return svg.pathFromArray(reverseLatLong(sortedPolygon), color);
+        return svg.pathFromArray(reverseLatLong(sortedPolygon), true, color);
     } else if (containsSouthPole) {
         const sortedPolygon: mf.Polygon = [[-90, 180], [-90, -180], ...sortPolygon(polygon)];
-        return svg.pathFromArray(reverseLatLong(sortedPolygon), color);
+        return svg.pathFromArray(reverseLatLong(sortedPolygon), true, color);
     } else {
         let s: string = "";
         const splitPolygons = splitPolygon(polygon);
-        for (const p of splitPolygons) {s += svg.pathFromArray(reverseLatLong(p), color);}
+        for (const p of splitPolygons) {s += svg.pathFromArray(reverseLatLong(p), true, color);}
         return s;
     }
 }
