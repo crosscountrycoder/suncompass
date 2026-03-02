@@ -296,8 +296,8 @@ export function generateSunSvg(options: sunSvgOptions): string {
     // special coordinate system for graph (x is in days, y is in seconds)
     const scaleX = diagramWidth / days;
     const scaleY = -diagramHeight / 86400;
-    svgString += `<g id="graph" transform="translate(${leftPadding}, ${topPadding+diagramHeight})` + 
-    ` scale(${scaleX.toPrecision(8)}, ${scaleY.toPrecision(8)})" stroke-width="1" fill="none">\n`;
+    svgString += `<g id="graph" transform="translate(${leftPadding},${topPadding+diagramHeight})` + 
+    ` scale(${scaleX.toPrecision(8)},${scaleY.toPrecision(8)})" stroke-width="1" fill="none">\n`;
 
     if (type === "length") { // day/twilight/night length plot
         const dLengths: number[] = []; // day lengths
@@ -409,8 +409,8 @@ export function generateMoonSvg(options: moonSvgOptions) {
     // special coordinate system for graph (x is in days, y is in seconds)
     const scaleX = diagramWidth / days;
     const scaleY = -diagramHeight / 86400;
-    svgString += `<g id="graph" transform="translate(${leftPadding}, ${topPadding+diagramHeight})` + 
-    ` scale(${scaleX.toPrecision(8)}, ${scaleY.toPrecision(8)})" stroke-width="1">\n`;
+    svgString += `<g id="graph" transform="translate(${leftPadding},${topPadding+diagramHeight})` + 
+    ` scale(${scaleX.toPrecision(8)},${scaleY.toPrecision(8)})" stroke-width="1">\n`;
     
     // add light blue polygons (when moon above horizon)
     svgString += `<g id="moonlight" fill="#80c0ff">\n`
