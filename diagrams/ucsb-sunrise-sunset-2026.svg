@@ -49,7 +49,7 @@
 <line x1="365" y1="0" x2="365" y2="86400"/>
 </g>
 </g>
-<g id="gridtext" font-family="Arial" font-size="11pt" dominant-baseline="middle" fill="#000000">
+<g id="gridtext" font-family="Arial,sans-serif" font-size="11pt" dominant-baseline="middle" fill="#000000">
 <g text-anchor="end">
 <text x="20" y="510">0</text>
 <text x="20" y="468.33">2</text>

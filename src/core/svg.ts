@@ -199,7 +199,7 @@ export function generateGrid(options: sunSvgOptions | moonSvgOptions, gridlineCo
  */
 export function generateSunSvg(options: sunSvgOptions): string {
     const {sunTable,type,title,svgWidth=1035,svgHeight=535,diagramWidth=1000,diagramHeight=500,leftPadding=25,rightPadding=10,
-        topPadding=10,bottomPadding=25,textSize=11,font="Arial",language="en",gridInterval=2,gridlineWidth=0.5} = options;
+        topPadding=10,bottomPadding=25,textSize=11,font="Arial,sans-serif",language="en",gridInterval=2,gridlineWidth=0.5} = options;
     const days = sunTable.solarEvents.length; // 365 days for common years, 366 for leap years
     const nOptions = // normalized options
     {...options,diagramWidth,diagramHeight,leftPadding,rightPadding,topPadding,bottomPadding,textSize,font,language,gridInterval,gridlineWidth};
@@ -388,7 +388,7 @@ export function generateSunSvg(options: sunSvgOptions): string {
  */
 export function generateMoonSvg(options: moonSvgOptions) {
     const {sunTable,moonTable,title,svgWidth=1035,svgHeight=535,diagramWidth=1000,diagramHeight=500,leftPadding=25,rightPadding=10,
-        topPadding=10,bottomPadding=25,textSize=11,font="Arial",language="en",gridInterval=2,gridlineWidth=0.5} = options;
+        topPadding=10,bottomPadding=25,textSize=11,font="Arial,sans-serif",language="en",gridInterval=2,gridlineWidth=0.5} = options;
     const days = sunTable.solarEvents.length; // 365 days for common years, 366 for leap years
     const nOptions = // normalized options
     {...options,diagramWidth,diagramHeight,leftPadding,rightPadding,topPadding,bottomPadding,textSize,font,language,gridInterval,gridlineWidth};
