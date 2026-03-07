@@ -162,9 +162,9 @@ export function months(language: string = "en"): string[] {
 }
 
 /** Edges of the months, used for drawing gridlines. */
-export function monthEdges(leapYear: boolean = false): number[] {
-    if (leapYear) {return [0,31,60,91,121,152,182,213,244,274,305,335,366];}
-    else {return [0,31,59,90,120,151,181,212,243,273,304,334,365];}
+export function monthEdges(yearLength: number): number[] {
+    if (yearLength === 366) {return [0,31,60,91,121,152,182,213,244,274,305,335,366];}
+    else {return [0,31,59,90,120,151,181,212,243,273,304,334,yearLength];}
 }
 
 /** This returns an array of two strings: [lineString, textString].
@@ -186,7 +186,6 @@ export function generateGrid(
     const font = options.font!;
     const gridlineWidth = options.gridlineWidth!;
     const days = options.sunTable.solarEvents.length;
-    const isLeapYear = (days === 366);
     const scaleX = diagramWidth / days;
     const language = options.language!;
 
@@ -201,14 +200,14 @@ export function generateGrid(
     textString += `${indent(textIndent+1)}</g>\n${indent(textIndent+1)}<g text-anchor="middle">\n`;
     
     for (let i=0; i<12; i++) {
-        const xText = (monthEdges(isLeapYear)[i] + monthEdges(isLeapYear)[i+1])/2 * scaleX + leftPadding;
+        const xText = (monthEdges(days)[i] + monthEdges(days)[i+1])/2 * scaleX + leftPadding;
         const y = topPadding+diagramHeight;
         textString += indent(textIndent+2) + textSvg(months(language)[i], xText, y+12);
     }
     textString += `${indent(textIndent+1)}</g>\n${indent(textIndent)}</g>\n`;
 
     let verticalLines = ``;
-    for (let i=0; i<13; i++) {verticalLines += `M${monthEdges(isLeapYear)[i]},0V86400`;}
+    for (let i=0; i<13; i++) {verticalLines += `M${monthEdges(days)[i]},0V86400`;}
     let horizontalLines = ``;
     for (let i=0; i<=24; i+=gridInterval) {horizontalLines += `M0,${i*3600}H${days}`;}
 
