@@ -125,25 +125,6 @@ export function quadraticZero(x0: number, y0: number, x1: number, y1: number, x2
     }
 }
 
-/** Signed "twice area" of triangle p0,p1,p2 (zero -> collinear). Helper function for isCollinear */
-function cross(p0: number[], p1: number[], p2: number[]): number {
-    const ax = p1[0] - p0[0], ay = p1[1] - p0[1];
-    const bx = p2[0] - p0[0], by = p2[1] - p0[1];
-    return ax * by - ay * bx;
-}
-
-/** Distance from p1 to the infinite line through p0–p2. Helper function for isCollinear. */
-function pointLineDistance(p0: number[], p1: number[], p2: number[]): number {
-    const area2 = Math.abs(cross(p0, p1, p2));
-    const len = Math.hypot(p2[0] - p0[0], p2[1] - p0[1]);
-    return len === 0 ? Math.hypot(p1[0] - p0[0], p1[1] - p0[1]) : area2 / len;
-}
-
-/** True if p1 is collinear with p0–p2 within epsilon (absolute distance in same units as coords) */
-export function isCollinear(p0: number[], p1: number[], p2: number[], epsilon = 1e-6): boolean {
-    return pointLineDistance(p0, p1, p2) <= epsilon;
-}
-
 /** Like toFixed() function in JavaScript/TypeScript, but removes trailing zeroes. */
 export function toFixedS(n: number, precision: number) {
     if (precision === 0) {return n.toFixed(0);}

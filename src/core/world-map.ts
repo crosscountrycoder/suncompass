@@ -147,7 +147,7 @@ function reverseLatLong(polygon: mf.Polygon): mf.Polygon {
  * @returns The SVG encoding of 
  */
 function svgCircleEquirectangular(lat: number, long: number, radius: number, numPoints: number = NUM_POINTS,
-    r: number = 0, g: number = 0, b: number = 0, a: number = 0.3): string {
+    id?: string, r: number = 0, g: number = 0, b: number = 0, a: number = 0.3): string {
     if (Math.abs(Math.abs(lat) + radius - 90) < 1e-5) {radius -= 2e-5;}
     const containsNorthPole = lat + radius > 90;
     const containsSouthPole = lat - radius < -90;
@@ -155,14 +155,15 @@ function svgCircleEquirectangular(lat: number, long: number, radius: number, num
     const color = `rgba(${r}, ${g}, ${b}, ${a})`;
     if (containsNorthPole) {
         const sortedPolygon: mf.Polygon = [[90, 180], [90, -180], ...sortPolygon(polygon)];
-        return svg.pathFromArray(reverseLatLong(sortedPolygon), true, color);
+        return svg.pathFromArray([reverseLatLong(sortedPolygon)], true, color);
     } else if (containsSouthPole) {
         const sortedPolygon: mf.Polygon = [[-90, 180], [-90, -180], ...sortPolygon(polygon)];
-        return svg.pathFromArray(reverseLatLong(sortedPolygon), true, color);
+        return svg.pathFromArray([reverseLatLong(sortedPolygon)], true, color);
     } else {
         let s: string = "";
         const splitPolygons = splitPolygon(polygon);
-        for (const p of splitPolygons) {s += svg.pathFromArray(reverseLatLong(p), true, color);}
+        const reversedPolygons = splitPolygons.map(reverseLatLong);
+        s += svg.pathFromArray(reversedPolygons, true, color, undefined, undefined, id);
         return s;
     }
 }
@@ -224,11 +225,11 @@ string {
     mLong = mf.clamp(mLong, -179.9999, 179.9999);
     const moonAngularRadius = angularRadiusVisibility(90.8333, moonDistance(unix, true));
 
-    return header + title + baseWorldMap() +
-    svgCircleEquirectangular(mLat, mLong, Math.min(89.9999, moonAngularRadius), numPoints, 255, 255, 0, 0.25) +
-    svgCircleEquirectangular(-sLat, antisolarLong, 89.1667, numPoints) + 
-    svgCircleEquirectangular(-sLat, antisolarLong, 84, numPoints) + 
-    svgCircleEquirectangular(-sLat, antisolarLong, 78, numPoints) + 
-    svgCircleEquirectangular(-sLat, antisolarLong, 72, numPoints) + 
-    moonIcon(mLong, mLat, 7.5) + sunIcon(sLong, sLat, 7.5) + `</g>\n</svg>\n`;
+    return header + title + baseWorldMap() + svg.indent(2) + 
+    svgCircleEquirectangular(mLat, mLong, Math.min(89.9999, moonAngularRadius), numPoints, "moonlight", 255, 255, 0, 0.25) +
+    svg.indent(2) + svgCircleEquirectangular(-sLat, antisolarLong, 89.1667, numPoints, "civil-twilight") + 
+    svg.indent(2) + svgCircleEquirectangular(-sLat, antisolarLong, 84, numPoints, "nautical-twilight") + 
+    svg.indent(2) + svgCircleEquirectangular(-sLat, antisolarLong, 78, numPoints, "astro-twilight") + 
+    svg.indent(2) + svgCircleEquirectangular(-sLat, antisolarLong, 72, numPoints, "night") + 
+    moonIcon(mLong, mLat, 7.5) + sunIcon(sLong, sLat, 7.5) + svg.indent(1) + `</g>\n</svg>\n`;
 }
